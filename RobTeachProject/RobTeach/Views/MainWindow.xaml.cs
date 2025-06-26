@@ -3240,10 +3240,19 @@ namespace RobTeach.Views
 
         private string WriteSendDataToTempFile(Models.Configuration config)
         {
-            string tempFileName = $"RobTeach_SendData_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt";
-            string tempFilePath = Path.Combine(Path.GetTempPath(), tempFileName);
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string logDirectory = Path.Combine(baseDirectory, "log");
 
-            using (StreamWriter writer = new StreamWriter(tempFilePath))
+            // Ensure the log directory exists
+            if (!Directory.Exists(logDirectory))
+            {
+                Directory.CreateDirectory(logDirectory);
+            }
+
+            string dataFileName = $"RobTeach_SendData_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt";
+            string dataFilePath = Path.Combine(logDirectory, dataFileName);
+
+            using (StreamWriter writer = new StreamWriter(dataFilePath))
             {
                 // 1. Total Number of Passes
                 writer.WriteLine(((float)config.SprayPasses.Count).ToString("F3"));
@@ -3346,7 +3355,7 @@ namespace RobTeach.Views
                     }
                 }
             }
-            return tempFilePath;
+            return dataFilePath; // Return the actual path where the file is saved
         }
     }
 }
