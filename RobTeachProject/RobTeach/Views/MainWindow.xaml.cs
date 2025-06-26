@@ -3359,7 +3359,12 @@ namespace RobTeach.Views
                              else
                              {
                                 WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint1);
-                                WritePointData(writer, trajectory.OriginalCircleCenter); // Rx, Ry, Rz default to 0 for center
+                                // Use OriginalCircleCenter's X,Y but CirclePoint1's Z for the output center Z
+                                DxfPoint circleCenterForOutput = new DxfPoint(
+                                    trajectory.OriginalCircleCenter.X,
+                                    trajectory.OriginalCircleCenter.Y,
+                                    trajectory.CirclePoint1.Coordinates.Z); // Z from the UI-influenced point
+                                WritePointData(writer, circleCenterForOutput);
                                 WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint3);
                              }
                         }
