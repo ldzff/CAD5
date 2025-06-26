@@ -105,6 +105,10 @@
                         <Label Content="Center Z:" VerticalAlignment="Center" Foreground="{StaticResource DefaultTextBrush}"/>
                         <TextBox Name="CircleCenterZTextBox" Width="50" IsReadOnly="False" VerticalAlignment="Center" Margin="2,0" TextChanged="CircleCenterZTextBox_TextChanged"/>
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="2">
+                        <Label Content="Runtime (s):" VerticalAlignment="Center" Foreground="{StaticResource DefaultTextBrush}"/>
+                        <TextBox Name="TrajectoryRuntimeTextBox" Width="60" VerticalAlignment="Center" Margin="2,0"/>
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 

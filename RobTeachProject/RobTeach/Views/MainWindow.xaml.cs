@@ -168,6 +168,9 @@ namespace RobTeach.Views
             TrajectoryIsReversedCheckBox.Checked += TrajectoryIsReversedCheckBox_Changed;
             TrajectoryIsReversedCheckBox.Unchecked += TrajectoryIsReversedCheckBox_Changed;
 
+            // Event handler for TrajectoryRuntimeTextBox
+            TrajectoryRuntimeTextBox.LostFocus += TrajectoryRuntimeTextBox_LostFocus;
+
             RefreshCurrentPassTrajectoriesListBox();
             UpdateSelectedTrajectoryDetailUI(); // Initial call (renamed)
             RefreshCadCanvasHighlights(); // Initial call for canvas highlights
@@ -669,6 +672,11 @@ namespace RobTeach.Views
                 LineEndZTextBox.Tag = selectedTrajectory;
                 ArcCenterZTextBox.Tag = selectedTrajectory;
                 CircleCenterZTextBox.Tag = selectedTrajectory; // Still use CircleCenterZTextBox for the tag
+
+                // Runtime TextBox
+                TrajectoryRuntimeTextBox.IsEnabled = true;
+                TrajectoryRuntimeTextBox.Text = selectedTrajectory.Runtime.ToString("F3"); // Format to 3 decimal places
+                TrajectoryRuntimeTextBox.Tag = selectedTrajectory;
             }
             else // No trajectory selected
             {
@@ -705,8 +713,48 @@ namespace RobTeach.Views
                 LineEndZTextBox.Tag = null;
                 ArcCenterZTextBox.Tag = null;
                 CircleCenterZTextBox.Tag = null;
+
+                // Runtime TextBox
+                TrajectoryRuntimeTextBox.IsEnabled = false;
+                TrajectoryRuntimeTextBox.Text = string.Empty;
+                TrajectoryRuntimeTextBox.Tag = null;
             }
         }
+
+        // Removed CalculateTrajectoryLength - Moved to TrajectoryUtils
+
+        private void TrajectoryRuntimeTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (TrajectoryRuntimeTextBox.Tag is Trajectory selectedTrajectory && selectedTrajectory != null)
+            {
+                if (double.TryParse(TrajectoryRuntimeTextBox.Text, out double newRuntime))
+                {
+                    double minRuntime = TrajectoryUtils.CalculateMinRuntime(selectedTrajectory);
+                    if (newRuntime >= minRuntime)
+                    {
+                        if (selectedTrajectory.Runtime != newRuntime)
+                        {
+                            selectedTrajectory.Runtime = newRuntime;
+                            isConfigurationDirty = true;
+                            // No need to refresh listbox item as Runtime is not part of its ToString() typically
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Runtime cannot be less than the minimum calculated value: {minRuntime:F3} s.", "Invalid Runtime", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        TrajectoryRuntimeTextBox.Text = selectedTrajectory.Runtime.ToString("F3"); // Revert to current or last valid
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Invalid runtime value. Please enter a valid number.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    TrajectoryRuntimeTextBox.Text = selectedTrajectory.Runtime.ToString("F3"); // Revert
+                }
+            }
+        }
+
+        // Removed CalculateMinRuntime - Moved to TrajectoryUtils
+
 
         private void TrajectoryIsReversedCheckBox_Changed(object sender, RoutedEventArgs e)
         {
@@ -1574,6 +1622,7 @@ namespace RobTeach.Views
                             break;
                     }
                     PopulateTrajectoryPoints(newTrajectory);
+                    newTrajectory.Runtime = TrajectoryUtils.CalculateMinRuntime(newTrajectory); // Set default runtime
                     currentPass.Trajectories.Add(newTrajectory);
                     isConfigurationDirty = true;
                     trajectoryToSelect = newTrajectory; // Mark this new trajectory for selection
@@ -2507,6 +2556,7 @@ namespace RobTeach.Views
                                     break;
                             }
                             PopulateTrajectoryPoints(newTrajectory);
+                            newTrajectory.Runtime = TrajectoryUtils.CalculateMinRuntime(newTrajectory); // Set default runtime
                             currentPass.Trajectories.Add(newTrajectory);
                             itemsAddedCount++;
                         }

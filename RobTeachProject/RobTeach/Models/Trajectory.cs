@@ -111,6 +111,11 @@ namespace RobTeach.Models
         public bool LowerNozzleLiquidOn { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets the runtime for this trajectory in seconds.
+        /// </summary>
+        public double Runtime { get; set; } // Default value will be set dynamically
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="Trajectory"/> class.
         /// A parameterless constructor is required for JSON deserialization.
         /// </summary>
