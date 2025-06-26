@@ -3329,23 +3329,8 @@ namespace RobTeach.Views
                             else
                             {
                                 WriteTrajectoryPointWithAnglesData(writer, trajectory.ArcPoint1);
-
-                                var arcParams = GeometryUtils.CalculateArcParametersFromThreePoints(
-                                    trajectory.ArcPoint1.Coordinates,
-                                    trajectory.ArcPoint2.Coordinates,
-                                    trajectory.ArcPoint3.Coordinates);
-
-                                if (arcParams.HasValue)
-                                {
-                                    // Center point with Z from P1, Rx,Ry,Rz = 0
-                                    DxfPoint centerPointWithP1Z = new DxfPoint(arcParams.Value.Center.X, arcParams.Value.Center.Y, trajectory.ArcPoint1.Coordinates.Z);
-                                    WritePointData(writer, centerPointWithP1Z);
-                                }
-                                else
-                                {
-                                     // Fallback: Write zeros for center point if calculation fails
-                                    for(int i=0; i < 6; i++) writer.WriteLine(0.0f.ToString("F3"));
-                                }
+                                // The second point for an Arc is ArcPoint2 (midpoint on circumference)
+                                WriteTrajectoryPointWithAnglesData(writer, trajectory.ArcPoint2);
                                 WriteTrajectoryPointWithAnglesData(writer, trajectory.ArcPoint3);
                             }
                         }
@@ -3359,12 +3344,8 @@ namespace RobTeach.Views
                              else
                              {
                                 WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint1);
-                                // Use OriginalCircleCenter's X,Y but CirclePoint1's Z for the output center Z
-                                DxfPoint circleCenterForOutput = new DxfPoint(
-                                    trajectory.OriginalCircleCenter.X,
-                                    trajectory.OriginalCircleCenter.Y,
-                                    trajectory.CirclePoint1.Coordinates.Z); // Z from the UI-influenced point
-                                WritePointData(writer, circleCenterForOutput);
+                                // The second point for a Circle is CirclePoint2 (a point on circumference)
+                                WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint2);
                                 WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint3);
                              }
                         }
