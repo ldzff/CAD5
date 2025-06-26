@@ -90,6 +90,9 @@ namespace RobTeach.Services
                 trajectory.LowerNozzleGasOn = GetBooleanProperty(root, "LowerNozzleGasOn");
                 trajectory.LowerNozzleLiquidOn = GetBooleanProperty(root, "LowerNozzleLiquidOn");
 
+                // Runtime property
+                trajectory.Runtime = GetDoubleProperty(root, "Runtime", 0.0); // Default to 0.0 if not present
+
                 // Conditionally deserialize geometric properties
                 if (trajectory.PrimitiveType == "Line")
                 {
@@ -260,6 +263,9 @@ namespace RobTeach.Services
             writer.WriteBoolean("LowerNozzleEnabled", value.LowerNozzleEnabled);
             writer.WriteBoolean("LowerNozzleGasOn", value.LowerNozzleGasOn);
             writer.WriteBoolean("LowerNozzleLiquidOn", value.LowerNozzleLiquidOn);
+
+            // Runtime property
+            writer.WriteNumber("Runtime", value.Runtime);
 
             // Geometric properties based on PrimitiveType
             switch (value.PrimitiveType)
