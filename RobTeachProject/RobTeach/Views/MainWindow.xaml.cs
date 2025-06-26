@@ -760,12 +760,33 @@ namespace RobTeach.Views
         {
             if (CurrentPassTrajectoriesListBox.SelectedItem is Trajectory selectedTrajectory)
             {
-                selectedTrajectory.IsReversed = TrajectoryIsReversedCheckBox.IsChecked ?? false;
-                isConfigurationDirty = true;
-                PopulateTrajectoryPoints(selectedTrajectory); // Regenerate points
-                CurrentPassTrajectoriesListBox.Items.Refresh(); // Update display if ToString() changed or for other bound properties
-                RefreshCadCanvasHighlights(); // May be needed if visual representation on canvas depends on points/direction
-                UpdateDirectionIndicator(); // Update arrow when direction changes
+                bool isReversedNow = TrajectoryIsReversedCheckBox.IsChecked ?? false;
+                if (selectedTrajectory.IsReversed != isReversedNow) // Only proceed if state actually changed
+                {
+                    selectedTrajectory.IsReversed = isReversedNow;
+                    isConfigurationDirty = true;
+
+                    if (selectedTrajectory.PrimitiveType == "Line")
+                    {
+                        var tempPoint = selectedTrajectory.LineStartPoint;
+                        selectedTrajectory.LineStartPoint = selectedTrajectory.LineEndPoint;
+                        selectedTrajectory.LineEndPoint = tempPoint;
+                    }
+                    else if (selectedTrajectory.PrimitiveType == "Arc")
+                    {
+                        var tempArcPoint = selectedTrajectory.ArcPoint1;
+                        selectedTrajectory.ArcPoint1 = selectedTrajectory.ArcPoint3;
+                        selectedTrajectory.ArcPoint3 = tempArcPoint;
+                        // Note: ArcPoint2 (midpoint) remains the same.
+                        // The interpretation of P1, P2, P3 to calculate center, start/end angles
+                        // in PopulateTrajectoryPoints and WriteSendDataToTempFile must be robust to this swap.
+                    }
+
+                    PopulateTrajectoryPoints(selectedTrajectory); // Regenerate points for display
+                    CurrentPassTrajectoriesListBox.Items.Refresh(); // Update display
+                    RefreshCadCanvasHighlights();
+                    UpdateDirectionIndicator();
+                }
             }
         }
 
