@@ -2101,6 +2101,26 @@ namespace RobTeach.Views
                 return;
             }
 
+            // --- Validate that all configured spray passes have trajectories ---
+            if (_currentConfiguration == null || _currentConfiguration.SprayPasses == null || !_currentConfiguration.SprayPasses.Any())
+            {
+                // This case is handled further down, but good to be aware of it.
+                // The more specific check is for existing passes that are empty.
+            }
+            else
+            {
+                foreach (var pass in _currentConfiguration.SprayPasses)
+                {
+                    if (pass.Trajectories == null || !pass.Trajectories.Any())
+                    {
+                        MessageBox.Show($"Spray pass '{pass.PassName}' contains no primitives. Please add primitives to all configured passes or remove empty ones before sending.", "Empty Spray Pass", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        StatusTextBlock.Text = $"Sending aborted: Spray pass '{pass.PassName}' is empty.";
+                        return; // Abort sending
+                    }
+                }
+            }
+            // --- End of validation for empty passes ---
+
             short robotStatus = statusResult.Value;
             Debug.WriteLine($"[JULES_DEBUG] SendToRobotButton_Click: Robot status read from address {robotStatusAddress} = {robotStatus}");
 
