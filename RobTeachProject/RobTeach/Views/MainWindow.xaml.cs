@@ -84,11 +84,13 @@ namespace RobTeach.Views
         public MainWindow()
         {
             InitializeComponent();
+            AppLogger.Log("Application started."); // Log application start
             if (CadCanvas.Background == null) CadCanvas.Background = Brushes.LightGray; // Ensure canvas has a background for hit testing.
             _directionIndicators = new List<DirectionIndicator>();
 
             // Initialize product name with a timestamp to ensure uniqueness for new configurations.
             ProductNameTextBox.Text = $"Product_{DateTime.Now:yyyyMMddHHmmss}";
+            _previousProductName = ProductNameTextBox.Text; // Initialize for LostFocus tracking
             _currentConfiguration = new Models.Configuration();
             _currentConfiguration.ProductName = ProductNameTextBox.Text;
 
@@ -171,6 +173,9 @@ namespace RobTeach.Views
             // Event handler for TrajectoryRuntimeTextBox
             TrajectoryRuntimeTextBox.LostFocus += TrajectoryRuntimeTextBox_LostFocus;
 
+            // Event handler for ProductNameTextBox LostFocus (assuming XAML TextChanged might remain for isDirty)
+            ProductNameTextBox.LostFocus += ProductNameTextBox_LostFocus;
+
             RefreshCurrentPassTrajectoriesListBox();
             UpdateSelectedTrajectoryDetailUI(); // Initial call (renamed)
             RefreshCadCanvasHighlights(); // Initial call for canvas highlights
@@ -238,6 +243,7 @@ namespace RobTeach.Views
             SprayPassesListBox.ItemsSource = null;
             SprayPassesListBox.ItemsSource = _currentConfiguration.SprayPasses;
             SprayPassesListBox.SelectedItem = newPass;
+            AppLogger.Log($"Spray pass added: '{newPass.PassName}'.");
             isConfigurationDirty = true;
             UpdateDirectionIndicator(); // New pass selected, current trajectory selection changes
             UpdateOrderNumberLabels();
@@ -249,7 +255,9 @@ namespace RobTeach.Views
             {
                 if (_currentConfiguration.SprayPasses.Count <= 1)
                 {
-                    MessageBox.Show("Cannot remove the last spray pass.", "Action Denied", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    string msg = "Cannot remove the last spray pass.";
+                    AppLogger.Log(msg, LogLevel.Warning);
+                    MessageBox.Show(msg, "Action Denied", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
                 _currentConfiguration.SprayPasses.Remove(selectedPass);
@@ -267,6 +275,7 @@ namespace RobTeach.Views
                     _currentConfiguration.CurrentPassIndex = -1;
                     // Potentially add a new default pass here if needed
                 }
+                AppLogger.Log($"Spray pass removed: '{selectedPass.PassName}'. New current pass index: {_currentConfiguration.CurrentPassIndex}");
                 RefreshCurrentPassTrajectoriesListBox(); // Update trajectory list for new selected pass
                 isConfigurationDirty = true;
                 UpdateDirectionIndicator(); // Pass removed, current trajectory selection changes
@@ -292,25 +301,25 @@ namespace RobTeach.Views
                 _currentConfiguration.CurrentPassIndex >= _currentConfiguration.SprayPasses.Count ||
                 _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].Trajectories == null)
             {
-                Debug.WriteLine("[JULES_DEBUG] UpdateOrderNumberLabels: Current configuration or pass is invalid, returning.");
+                // Debug.WriteLine("[JULES_DEBUG] UpdateOrderNumberLabels: Current configuration or pass is invalid, returning.");
                 return;
             }
 
             var currentPassTrajectories = _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].Trajectories;
-            Debug.WriteLine("[JULES_DEBUG] At the beginning of UpdateOrderNumberLabels. Current pass trajectory order:");
-            for (int i = 0; i < currentPassTrajectories.Count; i++)
-            {
-                Debug.WriteLine($"[JULES_DEBUG]   UpdateLabels-Entry: Pass[{_currentConfiguration.CurrentPassIndex}]-Trajectory[{i}]: {currentPassTrajectories[i].ToString()}");
-            }
+            // Debug.WriteLine("[JULES_DEBUG] At the beginning of UpdateOrderNumberLabels. Current pass trajectory order:");
+            // for (int i = 0; i < currentPassTrajectories.Count; i++)
+            // {
+            //     Debug.WriteLine($"[JULES_DEBUG]   UpdateLabels-Entry: Pass[{_currentConfiguration.CurrentPassIndex}]-Trajectory[{i}]: {currentPassTrajectories[i].ToString()}");
+            // }
 
             for (int i = 0; i < currentPassTrajectories.Count; i++)
             {
                 var selectedTrajectory = currentPassTrajectories[i];
-                Debug.WriteLine($"[JULES_DEBUG] UpdateOrderNumberLabels: Checking Trajectory - Type: {selectedTrajectory.PrimitiveType}, Points Count: {(selectedTrajectory.Points?.Count ?? -1)}, Index: {i}");
+                // Debug.WriteLine($"[JULES_DEBUG] UpdateOrderNumberLabels: Checking Trajectory - Type: {selectedTrajectory.PrimitiveType}, Points Count: {(selectedTrajectory.Points?.Count ?? -1)}, Index: {i}");
 
                 if (selectedTrajectory.Points == null || !selectedTrajectory.Points.Any())
                 {
-                    Debug.WriteLine($"[JULES_DEBUG] UpdateOrderNumberLabels: SKIPPING label for Trajectory - Type: {selectedTrajectory.PrimitiveType}, Index: {i} due to no/empty points.");
+                    // Debug.WriteLine($"[JULES_DEBUG] UpdateOrderNumberLabels: SKIPPING label for Trajectory - Type: {selectedTrajectory.PrimitiveType}, Index: {i} due to no/empty points.");
                     continue; // Skip if no points to base position on
                 }
 
@@ -342,7 +351,7 @@ namespace RobTeach.Views
                 double offsetX = 5;  // Offset to the right of the anchor point
                 double offsetY = -15; // Offset above the anchor point (FontSize is 10, Padding makes it taller)
 
-                Debug.WriteLine($"[JULES_DEBUG] UpdateOrderNumberLabels: Creating label for Trajectory - Type: {selectedTrajectory.PrimitiveType}, Index: {i}, Anchor: {anchorPoint}");
+                // Debug.WriteLine($"[JULES_DEBUG] UpdateOrderNumberLabels: Creating label for Trajectory - Type: {selectedTrajectory.PrimitiveType}, Index: {i}, Anchor: {anchorPoint}");
                 Canvas.SetLeft(orderLabel, anchorPoint.X + offsetX);
                 Canvas.SetTop(orderLabel, anchorPoint.Y + offsetY);
                 Panel.SetZIndex(orderLabel, 100); // Ensure labels are on top
@@ -356,8 +365,12 @@ namespace RobTeach.Views
         {
             if (SprayPassesListBox.SelectedItem is SprayPass selectedPass)
             {
+                string oldPassName = selectedPass.PassName;
                 // Simple rename for now, no input dialog
-                selectedPass.PassName += "_Renamed";
+                string newPassName = selectedPass.PassName + "_Renamed"; // Simulate a rename
+                selectedPass.PassName = newPassName;
+
+                AppLogger.Log($"Spray pass renamed from '{oldPassName}' to '{newPassName}'.");
 
                 // Refresh ListBox
                 SprayPassesListBox.ItemsSource = null;
@@ -542,6 +555,7 @@ namespace RobTeach.Views
                 CurrentPassTrajectoriesListBox.ItemsSource = null; // Refresh
                 CurrentPassTrajectoriesListBox.ItemsSource = currentPass.Trajectories;
                 CurrentPassTrajectoriesListBox.SelectedIndex = selectedIndex - 1;
+                AppLogger.Log($"Trajectory moved up in pass '{currentPass.PassName}': '{itemToMove.ToString()}' to index {selectedIndex - 1}.");
                 isConfigurationDirty = true;
                 RefreshCadCanvasHighlights(); // Visual update after reorder
                 UpdateDirectionIndicator(); // Selection might change or visual needs refresh
@@ -564,6 +578,7 @@ namespace RobTeach.Views
                 CurrentPassTrajectoriesListBox.ItemsSource = null; // Refresh
                 CurrentPassTrajectoriesListBox.ItemsSource = currentPass.Trajectories;
                 CurrentPassTrajectoriesListBox.SelectedIndex = selectedIndex + 1;
+                AppLogger.Log($"Trajectory moved down in pass '{currentPass.PassName}': '{itemToMove.ToString()}' to index {selectedIndex + 1}.");
                 isConfigurationDirty = true;
                 RefreshCadCanvasHighlights(); // Visual update after reorder
                 UpdateDirectionIndicator(); // Selection might change or visual needs refresh
@@ -734,20 +749,26 @@ namespace RobTeach.Views
                     {
                         if (selectedTrajectory.Runtime != newRuntime)
                         {
+                            double oldRuntime = selectedTrajectory.Runtime;
                             selectedTrajectory.Runtime = newRuntime;
+                            AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' Runtime changed from {oldRuntime:F3}s to {newRuntime:F3}s in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
                             isConfigurationDirty = true;
                             // No need to refresh listbox item as Runtime is not part of its ToString() typically
                         }
                     }
                     else
                     {
-                        MessageBox.Show($"Runtime cannot be less than the minimum calculated value: {minRuntime:F3} s.", "Invalid Runtime", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        string msg = $"Runtime cannot be less than the minimum calculated value: {minRuntime:F3} s.";
+                        AppLogger.Log(msg, LogLevel.Warning);
+                        MessageBox.Show(msg, "Invalid Runtime", MessageBoxButton.OK, MessageBoxImage.Warning);
                         TrajectoryRuntimeTextBox.Text = selectedTrajectory.Runtime.ToString("F3"); // Revert to current or last valid
                     }
                 }
                 else
                 {
-                    MessageBox.Show("Invalid runtime value. Please enter a valid number.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    string msg = "Invalid runtime value. Please enter a valid number.";
+                    AppLogger.Log(msg, LogLevel.Error);
+                    MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     TrajectoryRuntimeTextBox.Text = selectedTrajectory.Runtime.ToString("F3"); // Revert
                 }
             }
@@ -764,6 +785,7 @@ namespace RobTeach.Views
                 if (selectedTrajectory.IsReversed != isReversedNow) // Only proceed if state actually changed
                 {
                     selectedTrajectory.IsReversed = isReversedNow;
+                    AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' IsReversed changed to: {isReversedNow} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
                     isConfigurationDirty = true;
 
                     if (selectedTrajectory.PrimitiveType == "Line")
@@ -910,7 +932,7 @@ namespace RobTeach.Views
                     }
                     break;
                 case "Circle":
-                    Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Input P1={trajectory.CirclePoint1.Coordinates}, P2={trajectory.CirclePoint2.Coordinates}, P3={trajectory.CirclePoint3.Coordinates}");
+                    // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Input P1={trajectory.CirclePoint1.Coordinates}, P2={trajectory.CirclePoint2.Coordinates}, P3={trajectory.CirclePoint3.Coordinates}");
                     var circleParams = GeometryUtils.CalculateCircleCenterRadiusFromThreePoints(
                         trajectory.CirclePoint1.Coordinates,
                         trajectory.CirclePoint2.Coordinates,
@@ -919,7 +941,7 @@ namespace RobTeach.Views
                     if (circleParams.HasValue)
                     {
                         var (center, radius, normal) = circleParams.Value;
-                        Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Calculated Params: Center={center}, Radius={radius}, Normal={normal}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Calculated Params: Center={center}, Radius={radius}, Normal={normal}");
                         List<Point> circlePoints = new List<Point>();
 
                         DxfVector localXAxis;
@@ -929,7 +951,7 @@ namespace RobTeach.Views
                         else
                             localXAxis = (DxfVector.ZAxis).Cross(normal).Normalize();
                         DxfVector localYAxis = normal.Cross(localXAxis).Normalize();
-                        Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): ResolutionAngle={TrajectoryPointResolutionAngle}, LocalX={localXAxis}, LocalY={localYAxis}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): ResolutionAngle={TrajectoryPointResolutionAngle}, LocalX={localXAxis}, LocalY={localYAxis}");
 
                         for (double angleDeg = 0; angleDeg < 360.0; angleDeg += TrajectoryPointResolutionAngle)
                         {
@@ -941,7 +963,7 @@ namespace RobTeach.Views
                             DxfVector directionOnPlane_unscaled = termX + termY; // Assuming DxfVector + DxfVector is okay
                             DxfPoint pointOnCircle = center + new DxfVector(directionOnPlane_unscaled.X * radius, directionOnPlane_unscaled.Y * radius, directionOnPlane_unscaled.Z * radius);
                             circlePoints.Add(new Point(pointOnCircle.X, pointOnCircle.Y));
-                            Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): angleDeg={angleDeg}, pointOnCircle={pointOnCircle}, Added to circlePoints. Count: {circlePoints.Count}");
+                            // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): angleDeg={angleDeg}, pointOnCircle={pointOnCircle}, Added to circlePoints. Count: {circlePoints.Count}");
                         }
 
                         if (circlePoints.Count > 0)
@@ -951,10 +973,10 @@ namespace RobTeach.Views
                             if (Point.Subtract(circlePoints.Last(), firstPoint).LengthSquared > 1e-6)
                             {
                                 circlePoints.Add(firstPoint);
-                                Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Added closing point. Count: {circlePoints.Count}");
+                                // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Added closing point. Count: {circlePoints.Count}");
                             }
                         }
-                        Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Total points generated before AddRange: {circlePoints.Count}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Total points generated before AddRange: {circlePoints.Count}");
                         trajectory.Points.AddRange(circlePoints);
                         Debug.WriteLineIf(circlePoints.Count == 0, $"[JULES_WARNING] PopulateTrajectoryPoints (Circle): Generated 0 points for circle P1={trajectory.CirclePoint1.Coordinates}, P2={trajectory.CirclePoint2.Coordinates}, P3={trajectory.CirclePoint3.Coordinates}");
                     }
@@ -962,18 +984,18 @@ namespace RobTeach.Views
                     {
                         Debug.WriteLine($"[JULES_WARNING] PopulateTrajectoryPoints (Circle): Could not calculate circle parameters. Fallback to 3 points. P1={trajectory.CirclePoint1.Coordinates}, P2={trajectory.CirclePoint2.Coordinates}, P3={trajectory.CirclePoint3.Coordinates}");
                         trajectory.Points.Add(new Point(trajectory.CirclePoint1.Coordinates.X, trajectory.CirclePoint1.Coordinates.Y));
-                        Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Added P1. Points count: {trajectory.Points.Count}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Added P1. Points count: {trajectory.Points.Count}");
                         trajectory.Points.Add(new Point(trajectory.CirclePoint2.Coordinates.X, trajectory.CirclePoint2.Coordinates.Y));
-                        Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Added P2. Points count: {trajectory.Points.Count}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Added P2. Points count: {trajectory.Points.Count}");
                         trajectory.Points.Add(new Point(trajectory.CirclePoint3.Coordinates.X, trajectory.CirclePoint3.Coordinates.Y));
-                        Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Added P3. Points count: {trajectory.Points.Count}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Added P3. Points count: {trajectory.Points.Count}");
                         if(trajectory.Points.Count > 1)
                         {
                            trajectory.Points.Add(new Point(trajectory.CirclePoint1.Coordinates.X, trajectory.CirclePoint1.Coordinates.Y));
-                           Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Closed with P1. Points count: {trajectory.Points.Count}");
+                           // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle Fallback): Closed with P1. Points count: {trajectory.Points.Count}");
                         }
                     }
-                    Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Final trajectory.Points.Count = {trajectory.Points.Count}");
+                    // Debug.WriteLine($"[JULES_DEBUG] PopulateTrajectoryPoints (Circle): Final trajectory.Points.Count = {trajectory.Points.Count}");
                     break;
                 default:
                     // For other types or if PrimitiveType is not set, Points will remain empty or could be populated from OriginalDxfEntity if needed
@@ -1010,8 +1032,13 @@ namespace RobTeach.Views
         {
             if (CurrentPassTrajectoriesListBox.SelectedItem is Trajectory selectedTrajectory)
             {
-                selectedTrajectory.UpperNozzleGasOn = TrajectoryUpperNozzleGasOnCheckBox.IsChecked ?? false;
-                isConfigurationDirty = true;
+                bool newValue = TrajectoryUpperNozzleGasOnCheckBox.IsChecked ?? false;
+                if (selectedTrajectory.UpperNozzleGasOn != newValue)
+                {
+                    selectedTrajectory.UpperNozzleGasOn = newValue;
+                    AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' UpperNozzleGasOn changed to: {newValue} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
+                    isConfigurationDirty = true;
+                }
             }
         }
 
@@ -1020,20 +1047,32 @@ namespace RobTeach.Views
             if (CurrentPassTrajectoriesListBox.SelectedItem is Trajectory selectedTrajectory)
             {
                 bool isLiquidOn = TrajectoryUpperNozzleLiquidOnCheckBox.IsChecked ?? false;
-                selectedTrajectory.UpperNozzleLiquidOn = isLiquidOn;
+                bool gasStateChangedByLogic = false;
+
+                if (selectedTrajectory.UpperNozzleLiquidOn != isLiquidOn)
+                {
+                    selectedTrajectory.UpperNozzleLiquidOn = isLiquidOn;
+                    AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' UpperNozzleLiquidOn changed to: {isLiquidOn} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
+                    isConfigurationDirty = true;
+                }
 
                 if (isLiquidOn)
                 {
-                    TrajectoryUpperNozzleGasOnCheckBox.IsChecked = true; // Force Gas On
-                    selectedTrajectory.UpperNozzleGasOn = true; // Update model
+                    if (!selectedTrajectory.UpperNozzleGasOn) // If gas is not already on
+                    {
+                        selectedTrajectory.UpperNozzleGasOn = true; // Update model
+                        TrajectoryUpperNozzleGasOnCheckBox.IsChecked = true; // Force Gas On CheckBox
+                        AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' UpperNozzleGasOn automatically set to: true due to LiquidOn in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
+                        gasStateChangedByLogic = true; // Indicates a change that might need logging if not covered by its own event
+                        isConfigurationDirty = true;
+                    }
                     TrajectoryUpperNozzleGasOnCheckBox.IsEnabled = false; // Disable Gas checkbox
                 }
                 else
                 {
                     TrajectoryUpperNozzleGasOnCheckBox.IsEnabled = true; // Enable Gas checkbox
-                    // Gas state (selectedTrajectory.UpperNozzleGasOn) remains as it was or as user sets it via its own checkbox
                 }
-                isConfigurationDirty = true;
+                // No explicit logging for isConfigurationDirty here as it's set if property changes.
             }
         }
 
@@ -1053,8 +1092,13 @@ namespace RobTeach.Views
         {
             if (CurrentPassTrajectoriesListBox.SelectedItem is Trajectory selectedTrajectory)
             {
-                selectedTrajectory.LowerNozzleGasOn = TrajectoryLowerNozzleGasOnCheckBox.IsChecked ?? false;
-                isConfigurationDirty = true;
+                bool newValue = TrajectoryLowerNozzleGasOnCheckBox.IsChecked ?? false;
+                if (selectedTrajectory.LowerNozzleGasOn != newValue)
+                {
+                    selectedTrajectory.LowerNozzleGasOn = newValue;
+                    AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' LowerNozzleGasOn changed to: {newValue} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
+                    isConfigurationDirty = true;
+                }
             }
         }
 
@@ -1063,20 +1107,31 @@ namespace RobTeach.Views
             if (CurrentPassTrajectoriesListBox.SelectedItem is Trajectory selectedTrajectory)
             {
                 bool isLiquidOn = TrajectoryLowerNozzleLiquidOnCheckBox.IsChecked ?? false;
-                selectedTrajectory.LowerNozzleLiquidOn = isLiquidOn;
+                bool gasStateChangedByLogic = false;
+
+                if (selectedTrajectory.LowerNozzleLiquidOn != isLiquidOn)
+                {
+                    selectedTrajectory.LowerNozzleLiquidOn = isLiquidOn;
+                    AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' LowerNozzleLiquidOn changed to: {isLiquidOn} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
+                    isConfigurationDirty = true;
+                }
 
                 if (isLiquidOn)
                 {
-                    TrajectoryLowerNozzleGasOnCheckBox.IsChecked = true; // Force Gas On
-                    selectedTrajectory.LowerNozzleGasOn = true; // Update model
+                    if (!selectedTrajectory.LowerNozzleGasOn) // If gas is not already on
+                    {
+                        selectedTrajectory.LowerNozzleGasOn = true; // Update model
+                        TrajectoryLowerNozzleGasOnCheckBox.IsChecked = true; // Force Gas On CheckBox
+                        AppLogger.Log($"Trajectory '{selectedTrajectory.ToString()}' LowerNozzleGasOn automatically set to: true due to LiquidOn in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
+                        gasStateChangedByLogic = true;
+                        isConfigurationDirty = true;
+                    }
                     TrajectoryLowerNozzleGasOnCheckBox.IsEnabled = false; // Disable Gas checkbox
                 }
                 else
                 {
                     TrajectoryLowerNozzleGasOnCheckBox.IsEnabled = true; // Enable Gas checkbox
-                    // Gas state (selectedTrajectory.LowerNozzleGasOn) remains as it was
                 }
-                isConfigurationDirty = true;
             }
         }
 
@@ -1086,6 +1141,20 @@ namespace RobTeach.Views
             if (this.IsLoaded)
             {
                 isConfigurationDirty = true;
+                // This event fires on every keystroke, which is too noisy for logging.
+                // Logging will be done in a new ProductNameTextBox_LostFocus event handler.
+            }
+        }
+
+        private string _previousProductName = "";
+
+        private void ProductNameTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (this.IsLoaded && ProductNameTextBox.Text != _previousProductName)
+            {
+                AppLogger.Log($"Product name changed from '{_previousProductName}' to '{ProductNameTextBox.Text}'.");
+                _previousProductName = ProductNameTextBox.Text; // Update for next comparison
+                isConfigurationDirty = true; // isConfigurationDirty is likely already true due to TextChanged
             }
         }
 
@@ -1097,17 +1166,21 @@ namespace RobTeach.Views
             {
                 if (_trajectoryInDetailView.LineStartPoint.Z != newZ)
                 {
+                    double oldZ = _trajectoryInDetailView.LineStartPoint.Z;
                     _trajectoryInDetailView.LineStartPoint = new DxfPoint(
                         _trajectoryInDetailView.LineStartPoint.X,
                         _trajectoryInDetailView.LineStartPoint.Y,
                         newZ);
+                    AppLogger.Log($"Trajectory '{_trajectoryInDetailView.ToString()}' LineStartPoint.Z changed from {oldZ:F3} to {newZ:F3} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
                     isConfigurationDirty = true;
                     CurrentPassTrajectoriesListBox.Items.Refresh(); // Refresh if Z might be part of ToString()
                 }
             }
             else
             {
-                MessageBox.Show("Invalid Start Z value. Please enter a valid number.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "Invalid Start Z value. Please enter a valid number.";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 LineStartZTextBox.Text = _trajectoryInDetailView.LineStartPoint.Z.ToString("F3");
             }
         }
@@ -1132,17 +1205,21 @@ namespace RobTeach.Views
             {
                 if (_trajectoryInDetailView.LineEndPoint.Z != newZ)
                 {
+                    double oldZ = _trajectoryInDetailView.LineEndPoint.Z;
                     _trajectoryInDetailView.LineEndPoint = new DxfPoint(
                         _trajectoryInDetailView.LineEndPoint.X,
                         _trajectoryInDetailView.LineEndPoint.Y,
                         newZ);
+                    AppLogger.Log($"Trajectory '{_trajectoryInDetailView.ToString()}' LineEndPoint.Z changed from {oldZ:F3} to {newZ:F3} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
                     isConfigurationDirty = true;
                     CurrentPassTrajectoriesListBox.Items.Refresh(); // Refresh if Z might be part of ToString()
                 }
             }
             else
             {
-                MessageBox.Show("Invalid End Z value. Please enter a valid number.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "Invalid End Z value. Please enter a valid number.";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 LineEndZTextBox.Text = _trajectoryInDetailView.LineEndPoint.Z.ToString("F3");
             }
         }
@@ -1192,6 +1269,10 @@ namespace RobTeach.Views
 
                 if (changed)
                 {
+                    // To log the old Z, we'd need to capture it before any changes.
+                    // For simplicity, we'll log that the Arc Z was set to newZ.
+                    // A more detailed log would capture Z of P1, P2, P3 before and after.
+                    AppLogger.Log($"Trajectory '{_trajectoryInDetailView.ToString()}' Arc points Z (P1, P2, P3) set to {newZ:F3} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
                     isConfigurationDirty = true;
                     PopulateTrajectoryPoints(_trajectoryInDetailView); // Regenerate points with new Z
                     CurrentPassTrajectoriesListBox.Items.Refresh();
@@ -1199,7 +1280,9 @@ namespace RobTeach.Views
             }
             else
             {
-                MessageBox.Show("Invalid Arc Z value. Please enter a valid number.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "Invalid Arc Z value. Please enter a valid number.";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 // Restore to P1's Z or leave as is
                 if(_trajectoryInDetailView.ArcPoint1 != null)
                     ArcCenterZTextBox.Text = _trajectoryInDetailView.ArcPoint1.Coordinates.Z.ToString("F3");
@@ -1247,6 +1330,8 @@ namespace RobTeach.Views
 
                 if (changed)
                 {
+                    // Similar to Arc, logging the fact that Circle points Z were set to newZ.
+                    AppLogger.Log($"Trajectory '{_trajectoryInDetailView.ToString()}' Circle points Z (P1, P2, P3) set to {newZ:F3} in pass '{_currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].PassName}'.");
                     isConfigurationDirty = true;
                     PopulateTrajectoryPoints(_trajectoryInDetailView); // Regenerate points with new Z
                     CurrentPassTrajectoriesListBox.Items.Refresh(); // Refresh if Z might be part of ToString() or if Points property affects display
@@ -1254,7 +1339,9 @@ namespace RobTeach.Views
             }
             else
             {
-                MessageBox.Show("Invalid Circle Z value. Please enter a valid number.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "Invalid Circle Z value. Please enter a valid number.";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 // Restore to P1's Z
                 CircleCenterZTextBox.Text = _trajectoryInDetailView.CirclePoint1.Coordinates.Z.ToString("F3");
             }
@@ -1273,6 +1360,7 @@ namespace RobTeach.Views
         /// </summary>
         private void MainWindow_Closing(object sender, CancelEventArgs e)
         {
+            AppLogger.Log("Application closing."); // Log application close
             _modbusService.Disconnect(); // Clean up Modbus connection.
         }
 
@@ -1372,28 +1460,30 @@ namespace RobTeach.Views
 
                     if (_currentDxfDocument == null) {
                         StatusTextBlock.Text = "Failed to load DXF document (null document returned).";
-                        MessageBox.Show("The DXF document could not be loaded. The file might be empty or an unknown error occurred.", "Error Loading DXF", MessageBoxButton.OK, MessageBoxImage.Error);
+                        string msg = "The DXF document could not be loaded. The file might be empty or an unknown error occurred.";
+                        AppLogger.Log(msg, LogLevel.Error);
+                        MessageBox.Show(msg, "Error Loading DXF", MessageBoxButton.OK, MessageBoxImage.Error);
                         return;
                     }
 
                     // Note: IxMilia.Dxf doesn't expose Handle property directly
                     // We'll skip handle mapping for now
 
-                    Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: Document has {_currentDxfDocument.Entities.Count()} entities.");
+                    // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: Document has {_currentDxfDocument.Entities.Count()} entities.");
                     List<System.Windows.Shapes.Shape> wpfShapes = _cadService.GetWpfShapesFromDxf(_currentDxfDocument);
-                    Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: CadService.GetWpfShapesFromDxf returned {wpfShapes.Count} shapes.");
+                    // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: CadService.GetWpfShapesFromDxf returned {wpfShapes.Count} shapes.");
                     int shapeIndex = 0;
                     int entityIndex = 0;
                     foreach(var entity in _currentDxfDocument.Entities)
                     {
                         // string entityIdentifier = $"EntityType: {entity.GetType().Name}, Handle: {entity.Handle.ToString("X")}"; // Removed: Causes compile error
-                        Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: Processing DXF Entity at index {entityIndex} (C# type: {entity.GetType().Name})");
+                        // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: Processing DXF Entity at index {entityIndex} (C# type: {entity.GetType().Name})");
                         if (shapeIndex < wpfShapes.Count)
                         {
                             var wpfShape = wpfShapes[shapeIndex];
                             if (wpfShape != null)
                             {
-                                Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: WPF Shape for Entity at index {entityIndex} is {wpfShape.GetType().Name}. Adding to canvas and map.");
+                                // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: WPF Shape for Entity at index {entityIndex} is {wpfShape.GetType().Name}. Adding to canvas and map.");
                                 wpfShape.Stroke = DefaultStrokeBrush;
                                 wpfShape.StrokeThickness = DefaultStrokeThickness;
                                 wpfShape.MouseLeftButtonDown += OnCadEntityClicked;
@@ -1402,19 +1492,19 @@ namespace RobTeach.Views
                             }
                             else
                             {
-                                Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: WPF Shape for Entity at index {entityIndex} (C# type: {entity.GetType().Name}) is NULL from CadService.");
+                                // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: WPF Shape for Entity at index {entityIndex} (C# type: {entity.GetType().Name}) is NULL from CadService.");
                             }
                         }
                         else
                         {
-                             Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: No corresponding WPF shape in list for Entity at index {entityIndex} (C# type: {entity.GetType().Name}). Shape list too short.");
+                             // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: No corresponding WPF shape in list for Entity at index {entityIndex} (C# type: {entity.GetType().Name}). Shape list too short.");
                         }
                         shapeIndex++;
                         entityIndex++;
                     }
                     if (wpfShapes.Count != _currentDxfDocument.Entities.Count()) // CadService now returns list with nulls, so counts should match. This log indicates if not.
                     {
-                        Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: WARNING - Entity count ({_currentDxfDocument.Entities.Count()}) and WPF shapes list count ({wpfShapes.Count}) do not match. This is unexpected if CadService pads with nulls.");
+                        // Debug.WriteLine($"[JULES_DEBUG] LoadDxfButton_Click - Drawing Shapes: WARNING - Entity count ({_currentDxfDocument.Entities.Count()}) and WPF shapes list count ({wpfShapes.Count}) do not match. This is unexpected if CadService pads with nulls.");
                     }
 
                     _dxfBoundingBox = GetDxfBoundingBox(_currentDxfDocument);
@@ -1425,6 +1515,7 @@ namespace RobTeach.Views
                         Debug.WriteLine($"[DEBUG] LoadDxfButton_Click (Dispatcher): Calling PerformFitToView. CanvasSize=({CadCanvas.ActualWidth}, {CadCanvas.ActualHeight})");
                         PerformFitToView();
                         StatusTextBlock.Text = $"Loaded: {Path.GetFileName(_currentDxfFilePath)}. Click shapes to select.";
+                        AppLogger.Log($"Successfully loaded DXF: {Path.GetFileName(_currentDxfFilePath)}");
                         isConfigurationDirty = false; // Set dirty flag only after successful load and fit
                         Debug.WriteLine("[DEBUG] LoadDxfButton_Click (Dispatcher): PerformFitToView completed.");
                     }), DispatcherPriority.Background);
@@ -1432,11 +1523,16 @@ namespace RobTeach.Views
                     // If it needed to be set immediately, it would be here, but it's better tied to the completion of fitting.
                     UpdateDirectionIndicator(); // Update after loading and potential default selections
                     UpdateOrderNumberLabels();
-                } else { StatusTextBlock.Text = "DXF loading cancelled."; }
+                } else {
+                    StatusTextBlock.Text = "DXF loading cancelled.";
+                    AppLogger.Log("DXF loading cancelled by user.");
+                }
             }
             catch (FileNotFoundException fnfEx) {
                 StatusTextBlock.Text = "Error: DXF file not found.";
-                MessageBox.Show($"DXF file not found:\n{fnfEx.Message}", "Error Loading DXF", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = $"DXF file not found: {fnfEx.FileName}";
+                AppLogger.Log(msg, fnfEx, LogLevel.Error);
+                MessageBox.Show($"{msg}\n{fnfEx.Message}", "Error Loading DXF", MessageBoxButton.OK, MessageBoxImage.Error);
                 _currentDxfDocument = null;
                 isConfigurationDirty = false;
                 UpdateOrderNumberLabels();
@@ -1444,7 +1540,9 @@ namespace RobTeach.Views
             // Removed specific catch for netDxf.DxfVersionNotSupportedException. General Exception will handle DXF-specific errors.
             catch (Exception ex) {
                 StatusTextBlock.Text = "Error loading or processing DXF file.";
-                MessageBox.Show($"An error occurred while loading or processing the DXF file:\n{ex.Message}\n\nEnsure the file is a valid DXF format.", "Error Loading DXF", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = $"An error occurred while loading or processing the DXF file. Ensure the file is a valid DXF format.";
+                AppLogger.Log(msg, ex, LogLevel.Error);
+                MessageBox.Show($"{msg}\n{ex.Message}", "Error Loading DXF", MessageBoxButton.OK, MessageBoxImage.Error);
                 _currentDxfDocument = null;
                 CadCanvas.Children.Clear();
                 _selectedDxfEntities.Clear(); _wpfShapeToDxfEntityMap.Clear(); _dxfEntityHandleMap.Clear();
@@ -1501,7 +1599,9 @@ namespace RobTeach.Views
                 {
                     Trace.WriteLine("  -- Current pass index invalid, returning.");
                     Trace.Flush();
-                    MessageBox.Show("Please select or create a spray pass first.", "No Active Pass", MessageBoxButton.OK, MessageBoxImage.Information);
+                    string msg = "Please select or create a spray pass first.";
+                    AppLogger.Log(msg, LogLevel.Info); // Info, as it's guidance
+                    MessageBox.Show(msg, "No Active Pass", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
                 var currentPass = _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex];
@@ -1645,6 +1745,7 @@ namespace RobTeach.Views
                     PopulateTrajectoryPoints(newTrajectory);
                     newTrajectory.Runtime = TrajectoryUtils.CalculateMinRuntime(newTrajectory); // Set default runtime
                     currentPass.Trajectories.Add(newTrajectory);
+                    AppLogger.Log($"Trajectory added to pass '{currentPass.PassName}': Type '{newTrajectory.PrimitiveType}', EntityHandle '{newTrajectory.OriginalEntityHandle}'.", LogLevel.Info);
                     isConfigurationDirty = true;
                     trajectoryToSelect = newTrajectory; // Mark this new trajectory for selection
                 }
@@ -1785,7 +1886,9 @@ namespace RobTeach.Views
                     _currentConfiguration = _configService.LoadConfiguration(openFileDialog.FileName);
                     if (_currentConfiguration == null)
                     {
-                        MessageBox.Show("Failed to load configuration file. The file might be corrupt or not a valid configuration.", "Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        string msg = "Failed to load configuration file. The file might be corrupt or not a valid configuration.";
+                        AppLogger.Log($"{msg} Path: {openFileDialog.FileName}", LogLevel.Error);
+                        MessageBox.Show(msg, "Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
                         StatusTextBlock.Text = "Error: Failed to deserialize configuration.";
                         // Initialize a default empty configuration to prevent null reference issues later
                         _currentConfiguration = new Models.Configuration { ProductName = $"Product_{DateTime.Now:yyyyMMddHHmmss}" };
@@ -1793,26 +1896,26 @@ namespace RobTeach.Views
                     }
                     else // Configuration loaded successfully
                     {
-                        Debug.WriteLine("[JULES_DEBUG] Configuration loaded. Trajectory order after deserialization:");
-                        if (_currentConfiguration.SprayPasses != null && _currentConfiguration.CurrentPassIndex >= 0 && _currentConfiguration.CurrentPassIndex < _currentConfiguration.SprayPasses.Count)
-                        {
-                            var currentPass = _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex];
-                            if (currentPass != null && currentPass.Trajectories != null)
-                            {
-                                for (int i = 0; i < currentPass.Trajectories.Count; i++)
-                                {
-                                    Debug.WriteLine($"[JULES_DEBUG]   Pass[{_currentConfiguration.CurrentPassIndex}]-Trajectory[{i}]: {currentPass.Trajectories[i].ToString()}");
-                                }
-                            }
-                            else
-                            {
-                                Debug.WriteLine($"[JULES_DEBUG]   Current pass ({_currentConfiguration.CurrentPassIndex}) or its trajectories are null.");
-                            }
-                        }
-                        else
-                        {
-                            Debug.WriteLine("[JULES_DEBUG]   No spray passes or current pass index is invalid.");
-                        }
+                        // Debug.WriteLine("[JULES_DEBUG] Configuration loaded. Trajectory order after deserialization:");
+                        // if (_currentConfiguration.SprayPasses != null && _currentConfiguration.CurrentPassIndex >= 0 && _currentConfiguration.CurrentPassIndex < _currentConfiguration.SprayPasses.Count)
+                        // {
+                        //     var currentPass = _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex];
+                        //     if (currentPass != null && currentPass.Trajectories != null)
+                        //     {
+                        //         for (int i = 0; i < currentPass.Trajectories.Count; i++)
+                        //         {
+                        //             Debug.WriteLine($"[JULES_DEBUG]   Pass[{_currentConfiguration.CurrentPassIndex}]-Trajectory[{i}]: {currentPass.Trajectories[i].ToString()}");
+                        //         }
+                        //     }
+                        //     else
+                        //     {
+                        //         Debug.WriteLine($"[JULES_DEBUG]   Current pass ({_currentConfiguration.CurrentPassIndex}) or its trajectories are null.");
+                        //     }
+                        // }
+                        // else
+                        // {
+                        //     Debug.WriteLine("[JULES_DEBUG]   No spray passes or current pass index is invalid.");
+                        // }
                     }
 
                     ProductNameTextBox.Text = _currentConfiguration.ProductName;
@@ -1852,21 +1955,21 @@ namespace RobTeach.Views
 
                             if (_currentDxfDocument != null)
                             {
-                                Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: Document has {_currentDxfDocument.Entities.Count()} entities.");
+                                // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: Document has {_currentDxfDocument.Entities.Count()} entities.");
                                 List<System.Windows.Shapes.Shape> wpfShapes = _cadService.GetWpfShapesFromDxf(_currentDxfDocument);
-                                Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: CadService.GetWpfShapesFromDxf returned {wpfShapes.Count} shapes.");
+                                // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: CadService.GetWpfShapesFromDxf returned {wpfShapes.Count} shapes.");
                                 int shapeIndex = 0;
                                 int entityIndex = 0;
                                 foreach(var entity in _currentDxfDocument.Entities)
                                 {
                                     // string entityIdentifier = $"EntityType: {entity.GetType().Name}, Handle: {entity.Handle.ToString("X")}"; // Removed: Causes compile error
-                                    Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: Processing DXF Entity at index {entityIndex} (C# type: {entity.GetType().Name})");
+                                    // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: Processing DXF Entity at index {entityIndex} (C# type: {entity.GetType().Name})");
                                     if (shapeIndex < wpfShapes.Count)
                                     {
                                         var wpfShape = wpfShapes[shapeIndex];
                                         if (wpfShape != null)
                                         {
-                                            Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: WPF Shape for Entity at index {entityIndex} is {wpfShape.GetType().Name}. Adding to canvas and map.");
+                                            // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: WPF Shape for Entity at index {entityIndex} is {wpfShape.GetType().Name}. Adding to canvas and map.");
                                             wpfShape.Stroke = DefaultStrokeBrush;
                                             wpfShape.StrokeThickness = DefaultStrokeThickness;
                                             wpfShape.MouseLeftButtonDown += OnCadEntityClicked;
@@ -1875,19 +1978,19 @@ namespace RobTeach.Views
                                         }
                                         else
                                         {
-                                            Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: WPF Shape for Entity at index {entityIndex} (C# type: {entity.GetType().Name}) is NULL from CadService.");
+                                            // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: WPF Shape for Entity at index {entityIndex} (C# type: {entity.GetType().Name}) is NULL from CadService.");
                                         }
                                     }
                                     else
                                     {
-                                        Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: No corresponding WPF shape in list for Entity at index {entityIndex} (C# type: {entity.GetType().Name}). Shape list too short.");
+                                        // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: No corresponding WPF shape in list for Entity at index {entityIndex} (C# type: {entity.GetType().Name}). Shape list too short.");
                                     }
                                     shapeIndex++;
                                     entityIndex++;
                                 }
                                 if (wpfShapes.Count != _currentDxfDocument.Entities.Count()) // CadService now returns list with nulls, so counts should match. This log indicates if not.
                                 {
-                                     Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: WARNING - Entity count ({_currentDxfDocument.Entities.Count()}) and WPF shapes list count ({wpfShapes.Count}) do not match. This is unexpected if CadService pads with nulls.");
+                                     // Debug.WriteLine($"[JULES_DEBUG] Drawing Shapes: WARNING - Entity count ({_currentDxfDocument.Entities.Count()}) and WPF shapes list count ({wpfShapes.Count}) do not match. This is unexpected if CadService pads with nulls.");
                                 }
                                 _dxfBoundingBox = GetDxfBoundingBox(_currentDxfDocument);
                                 PerformFitToView();
@@ -1902,7 +2005,9 @@ namespace RobTeach.Views
                         catch (Exception dxfEx)
                         {
                             StatusTextBlock.Text = "Project file loaded, but failed to load embedded DXF content.";
-                            MessageBox.Show($"Failed to load embedded DXF content from the project file. It might be corrupt.\nError: {dxfEx.Message}", "DXF Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                            string msg = "Failed to load embedded DXF content from the project file. It might be corrupt.";
+                            AppLogger.Log(msg, dxfEx, LogLevel.Error);
+                            MessageBox.Show($"{msg}\nError: {dxfEx.Message}", "DXF Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
                             _currentDxfDocument = null; // Ensure it's null
                              // Clear canvas again in case partial loading happened before error, or if an error occurred in GetWpfShapesFromDxf
                             CadCanvas.Children.Clear();
@@ -1973,7 +2078,7 @@ namespace RobTeach.Views
                     // Populate points for all trajectories in the loaded configuration
                     if (_currentConfiguration != null && _currentConfiguration.SprayPasses != null)
                     {
-                        Debug.WriteLine("[JULES_DEBUG] Populating points for loaded trajectories.");
+                        // Debug.WriteLine("[JULES_DEBUG] Populating points for loaded trajectories.");
                         foreach (var pass in _currentConfiguration.SprayPasses)
                         {
                             if (pass.Trajectories != null)
@@ -1981,7 +2086,7 @@ namespace RobTeach.Views
                                 foreach (var trajectory in pass.Trajectories)
                                 {
                                     PopulateTrajectoryPoints(trajectory);
-                                    Debug.WriteLine($"[JULES_DEBUG]   Populated points for: {trajectory.ToString()} - Point Count: {trajectory.Points.Count}");
+                                    // Debug.WriteLine($"[JULES_DEBUG]   Populated points for: {trajectory.ToString()} - Point Count: {trajectory.Points.Count}");
                                 }
                             }
                         }
@@ -1991,18 +2096,18 @@ namespace RobTeach.Views
                     RefreshCadCanvasHighlights(); // Update canvas highlights for the loaded pass
                     UpdateDirectionIndicator(); // Config loaded, selection might have changed
 
-                    Debug.WriteLine("[JULES_DEBUG] Before calling UpdateOrderNumberLabels in LoadConfigButton_Click:");
-                    if (_currentConfiguration != null && _currentConfiguration.SprayPasses != null && _currentConfiguration.CurrentPassIndex >= 0 && _currentConfiguration.CurrentPassIndex < _currentConfiguration.SprayPasses.Count)
-                    {
-                        var currentPass = _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex];
-                        if (currentPass != null && currentPass.Trajectories != null)
-                        {
-                            for (int i = 0; i < currentPass.Trajectories.Count; i++)
-                            {
-                                Debug.WriteLine($"[JULES_DEBUG]   LoadConfig-PreCall: Pass[{_currentConfiguration.CurrentPassIndex}]-Trajectory[{i}]: {currentPass.Trajectories[i].ToString()}");
-                            }
-                        }
-                    }
+                    // Debug.WriteLine("[JULES_DEBUG] Before calling UpdateOrderNumberLabels in LoadConfigButton_Click:");
+                    // if (_currentConfiguration != null && _currentConfiguration.SprayPasses != null && _currentConfiguration.CurrentPassIndex >= 0 && _currentConfiguration.CurrentPassIndex < _currentConfiguration.SprayPasses.Count)
+                    // {
+                    //     var currentPass = _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex];
+                    //     if (currentPass != null && currentPass.Trajectories != null)
+                    //     {
+                    //         for (int i = 0; i < currentPass.Trajectories.Count; i++)
+                    //         {
+                    //             Debug.WriteLine($"[JULES_DEBUG]   LoadConfig-PreCall: Pass[{_currentConfiguration.CurrentPassIndex}]-Trajectory[{i}]: {currentPass.Trajectories[i].ToString()}");
+                    //         }
+                    //     }
+                    // }
                     UpdateOrderNumberLabels();
 
                     // Assuming _cadService.GetWpfShapesFromDxf and entity selection logic
@@ -2011,12 +2116,15 @@ namespace RobTeach.Views
                     // re-selecting entities based on handles stored in config if _currentDxfDocument is still relevant.
                     isConfigurationDirty = false;
                     StatusTextBlock.Text = $"Configuration loaded from {Path.GetFileName(openFileDialog.FileName)}";
+                    AppLogger.Log($"Successfully loaded configuration: {Path.GetFileName(openFileDialog.FileName)}");
                     _currentLoadedConfigPath = openFileDialog.FileName;
                 }
                 catch (Exception ex)
                 {
                     StatusTextBlock.Text = "Error loading configuration.";
-                    MessageBox.Show($"Failed to load configuration: {ex.Message}", "Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    string msg = $"Failed to load configuration from {openFileDialog.FileName}";
+                    AppLogger.Log(msg, ex, LogLevel.Error); // Already logged the exception here.
+                    MessageBox.Show($"{msg}: {ex.Message}", "Load Error", MessageBoxButton.OK, MessageBoxImage.Error); // MessageBox is fine.
                     // Reset to a default state if loading fails
                     _currentConfiguration = new Models.Configuration { ProductName = $"Product_{DateTime.Now:yyyyMMddHHmmss}" };
                     ProductNameTextBox.Text = _currentConfiguration.ProductName;
@@ -2033,6 +2141,7 @@ namespace RobTeach.Views
             else
             {
                 StatusTextBlock.Text = "Load configuration cancelled.";
+                AppLogger.Log("Configuration loading cancelled by user.");
             }
         }
         private void ModbusConnectButton_Click(object sender, RoutedEventArgs e)
@@ -2042,21 +2151,27 @@ namespace RobTeach.Views
 
             if (string.IsNullOrEmpty(ipAddress))
             {
-                MessageBox.Show("IP address cannot be empty.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "IP address cannot be empty.";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
             if (!int.TryParse(portString, out int port) || port < 1 || port > 65535)
             {
-                MessageBox.Show("Invalid port number. Please enter a number between 1 and 65535.", "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "Invalid port number. Please enter a number between 1 and 65535.";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Input Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
+            AppLogger.Log($"Attempting Modbus connection to {ipAddress}:{port}.");
             ModbusResponse response = _modbusService.Connect(ipAddress, port);
             ModbusStatusTextBlock.Text = response.Message;
 
             if (response.Success)
             {
+                AppLogger.Log($"Modbus connected successfully to {ipAddress}:{port}. Message: {response.Message}");
                 ModbusStatusIndicatorEllipse.Fill = Brushes.Green;
                 ModbusConnectButton.IsEnabled = false;
                 ModbusDisconnectButton.IsEnabled = true;
@@ -2065,6 +2180,7 @@ namespace RobTeach.Views
             }
             else
             {
+                AppLogger.Log($"Modbus connection failed to {ipAddress}:{port}. Message: {response.Message}", LogLevel.Error);
                 ModbusStatusIndicatorEllipse.Fill = Brushes.Red;
                 StatusTextBlock.Text = "Failed to connect to Modbus server.";
             }
@@ -2073,6 +2189,7 @@ namespace RobTeach.Views
         private void ModbusDisconnectButton_Click(object sender, RoutedEventArgs e)
         {
             _modbusService.Disconnect();
+            AppLogger.Log("Modbus disconnected by user.");
             ModbusStatusTextBlock.Text = "Disconnected";
             ModbusStatusIndicatorEllipse.Fill = Brushes.Red;
             ModbusConnectButton.IsEnabled = true;
@@ -2085,7 +2202,9 @@ namespace RobTeach.Views
         {
             if (!_modbusService.IsConnected)
             {
-                MessageBox.Show("Not connected to Modbus server. Please connect first.", "Modbus Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                string msg = "Not connected to Modbus server. Please connect first.";
+                AppLogger.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Modbus Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -2097,7 +2216,9 @@ namespace RobTeach.Views
 
             if (!statusResult.Success)
             {
-                MessageBox.Show($"无法读取机械臂状态: {statusResult.Message}", "Modbus 读取失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = $"无法读取机械臂状态: {statusResult.Message}"; // "Failed to read robot status"
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Modbus 读取失败", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
@@ -2113,7 +2234,9 @@ namespace RobTeach.Views
                 {
                     if (pass.Trajectories == null || !pass.Trajectories.Any())
                     {
-                        MessageBox.Show($"Spray pass '{pass.PassName}' contains no primitives. Please add primitives to all configured passes or remove empty ones before sending.", "Empty Spray Pass", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        string msg = $"Spray pass '{pass.PassName}' contains no primitives. Please add primitives to all configured passes or remove empty ones before sending.";
+                        AppLogger.Log(msg, LogLevel.Warning);
+                        MessageBox.Show(msg, "Empty Spray Pass", MessageBoxButton.OK, MessageBoxImage.Warning);
                         StatusTextBlock.Text = $"Sending aborted: Spray pass '{pass.PassName}' is empty.";
                         return; // Abort sending
                     }
@@ -2122,39 +2245,50 @@ namespace RobTeach.Views
             // --- End of validation for empty passes ---
 
             short robotStatus = statusResult.Value;
-            Debug.WriteLine($"[JULES_DEBUG] SendToRobotButton_Click: Robot status read from address {robotStatusAddress} = {robotStatus}");
+            // Debug.WriteLine($"[JULES_DEBUG] SendToRobotButton_Click: Robot status read from address {robotStatusAddress} = {robotStatus}");
 
             // Step 2: Check robot status
             if (robotStatus == 0)
             {
-                MessageBox.Show("当前机械臂处于工作状态", "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+                string msg = "当前机械臂处于工作状态"; // "Robot is currently busy"
+                AppLogger.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             else if (robotStatus == 2)
             {
-                MessageBox.Show("当前机械臂错误", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "当前机械臂错误"; // "Robot error"
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
             else if (robotStatus != 1) // Only proceed if status is 1
             {
-                MessageBox.Show($"未知的机械臂状态: {robotStatus}", "状态未知", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = $"未知的机械臂状态: {robotStatus}"; // "Unknown robot status"
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "状态未知", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
             // If status is 1, proceed with sending data.
-            Debug.WriteLine($"[JULES_DEBUG] SendToRobotButton_Click: Robot status is 1 (Ready). Proceeding to send configuration.");
+            // Debug.WriteLine($"[JULES_DEBUG] SendToRobotButton_Click: Robot status is 1 (Ready). Proceeding to send configuration.");
+            AppLogger.Log("Send to Robot initiated. Robot status is Ready.");
 
             // --- Write data to temporary file ---
+            string tempFilePath = string.Empty;
             try
             {
-                string tempFilePath = WriteSendDataToTempFile(_currentConfiguration);
+                tempFilePath = WriteSendDataToTempFile(_currentConfiguration);
+                AppLogger.Log($"Robot data successfully written to temporary file: {tempFilePath}");
                 StatusTextBlock.Text = $"Data for robot written to {tempFilePath}";
                 // Optionally, inform ModbusStatusTextBlock as well or use a more prominent display
                 // ModbusStatusTextBlock.Text = $"Data also written to {Path.GetFileName(tempFilePath)}";
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error writing data to temporary file: {ex.Message}", "File Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = "Error writing data to temporary file";
+                AppLogger.Log(msg, ex, LogLevel.Error);
+                MessageBox.Show($"{msg}: {ex.Message}", "File Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusTextBlock.Text = "Error writing data to temp file. Sending aborted.";
                 return; // Abort sending if file writing fails
             }
@@ -2177,7 +2311,9 @@ namespace RobTeach.Views
             else if (_currentConfiguration.SprayPasses == null || _currentConfiguration.SprayPasses.Count == 0)
             {
                 // No spray passes, so nothing to populate. SendConfiguration will handle this.
-                 MessageBox.Show("No spray passes in the current configuration to send.", "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                string msg = "No spray passes in the current configuration to send.";
+                AppLogger.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             else
@@ -2186,7 +2322,9 @@ namespace RobTeach.Views
                 // SendConfiguration will return an error for invalid index.
                 // No points to populate here for sending.
                 // Optionally, show a MessageBox here too, but ModbusService will also report it.
-                MessageBox.Show($"Cannot send: Invalid current spray pass index ({_currentConfiguration.CurrentPassIndex}).", "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                string msg = $"Cannot send: Invalid current spray pass index ({_currentConfiguration.CurrentPassIndex}).";
+                AppLogger.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return; // Prevent sending if pass index is clearly wrong but passes exist
             }
 
@@ -2196,11 +2334,13 @@ namespace RobTeach.Views
             // Using StatusTextBlock for general feedback seems more consistent with other operations
             if (response.Success)
             {
+                AppLogger.Log($"Configuration successfully sent to robot. Modbus response: {response.Message}");
                 StatusTextBlock.Text = "Configuration successfully sent to robot.";
                 ModbusStatusTextBlock.Text = response.Message; // Keep specific Modbus status updated too
             }
             else
             {
+                AppLogger.Log($"Failed to send configuration to robot. Modbus response: {response.Message}", LogLevel.Error);
                 StatusTextBlock.Text = $"Failed to send configuration: {response.Message}";
                 ModbusStatusTextBlock.Text = response.Message; // Update Modbus status as well
             }
@@ -2445,7 +2585,9 @@ namespace RobTeach.Views
                     _currentConfiguration.CurrentPassIndex >= _currentConfiguration.SprayPasses.Count ||
                     _currentConfiguration.SprayPasses[_currentConfiguration.CurrentPassIndex].Trajectories == null)
                 {
-                    MessageBox.Show("Please select or create a spray pass first to add entities.", "No Active Pass", MessageBoxButton.OK, MessageBoxImage.Information);
+                    string msg = "Please select or create a spray pass first to add entities.";
+                    AppLogger.Log(msg, LogLevel.Info); // Info, as it's guidance
+                    MessageBox.Show(msg, "No Active Pass", MessageBoxButton.OK, MessageBoxImage.Information);
                     e.Handled = true;
                     return;
                 }
@@ -2504,6 +2646,7 @@ namespace RobTeach.Views
                     }
                     if (itemsDeselectedCount > 0)
                     {
+                        AppLogger.Log($"Marquee deselection: {itemsDeselectedCount} trajectories removed from pass '{currentPass.PassName}'.");
                         selectionStateChanged = true;
                     }
                 }
@@ -2512,6 +2655,8 @@ namespace RobTeach.Views
                     // Mode: Additive selection (Normal Marquee)
                     // Add any items from the marquee that are not already selected.
                     int itemsAddedCount = 0;
+                    List<string> addedTrajectoryInfo = new List<string>(); // For logging details
+
                     foreach (DxfEntity? hitDxfEntity in marqueeHitEntities) // hitDxfEntity can be null if TryGetValue failed but was added
                     {
                         if (hitDxfEntity == null) continue; // Skip null entities
@@ -2618,11 +2763,13 @@ namespace RobTeach.Views
                             PopulateTrajectoryPoints(newTrajectory);
                             newTrajectory.Runtime = TrajectoryUtils.CalculateMinRuntime(newTrajectory); // Set default runtime
                             currentPass.Trajectories.Add(newTrajectory);
+                            addedTrajectoryInfo.Add($"Type '{newTrajectory.PrimitiveType}', EntityHandle '{newTrajectory.OriginalEntityHandle}'");
                             itemsAddedCount++;
                         }
                     }
                     if (itemsAddedCount > 0)
                     {
+                        AppLogger.Log($"Marquee selection: {itemsAddedCount} trajectories added to pass '{currentPass.PassName}'. Details: {string.Join("; ", addedTrajectoryInfo)}");
                         selectionStateChanged = true;
                     }
                 }
@@ -2674,7 +2821,9 @@ namespace RobTeach.Views
                 }
                 catch (Exception ex)
                 {
-                    StatusTextBlock.Text = $"Error creating configurations directory: {ex.Message}";
+                    string msg = "Error creating configurations directory.";
+                    AppLogger.Log(msg, ex, LogLevel.Error);
+                    StatusTextBlock.Text = $"{msg} {ex.Message}";
                     // Optionally, default to a known accessible path or handle error differently
                     initialDir = AppDomain.CurrentDomain.BaseDirectory;
                 }
@@ -2694,19 +2843,20 @@ namespace RobTeach.Views
                     try
                     {
                         dxfContentForSaving = File.ReadAllText(_currentDxfFilePath);
-                        Debug.WriteLine($"[JULES_DEBUG] PerformSaveOperation: Saving DXF content from file: {_currentDxfFilePath}");
+                        // Debug.WriteLine($"[JULES_DEBUG] PerformSaveOperation: Saving DXF content from file: {_currentDxfFilePath}");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Warning: Could not read DXF file content from {_currentDxfFilePath} for saving: {ex.Message}");
-                        MessageBox.Show($"Warning: Could not read DXF file content from '{_currentDxfFilePath}' for saving: {ex.Message}", "File Read Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        string msg = $"Could not read DXF file content from '{_currentDxfFilePath}' for saving.";
+                        AppLogger.Log(msg, ex, LogLevel.Warning);
+                        MessageBox.Show($"Warning: {msg} {ex.Message}", "File Read Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
                         // Keep dxfContentForSaving as string.Empty, or decide if we should use in-memory version if available
                         // For now, if file read fails, we save empty. This could be debated.
                         // If _currentConfiguration.DxfFileContent (in memory) is already populated from a previous successful load (even embedded),
                         // it might be better to use that.
                         // Let's refine: if file read fails, try to use in-memory if it's not the placeholder path.
                         if (_currentDxfFilePath != "(Embedded DXF from project file)" && !string.IsNullOrEmpty(_currentConfiguration.DxfFileContent)) {
-                             Debug.WriteLine($"[JULES_DEBUG] PerformSaveOperation: File read failed, but using non-empty in-memory DxfFileContent as fallback.");
+                             // Debug.WriteLine($"[JULES_DEBUG] PerformSaveOperation: File read failed, but using non-empty in-memory DxfFileContent as fallback.");
                             dxfContentForSaving = _currentConfiguration.DxfFileContent;
                         } else {
                             dxfContentForSaving = string.Empty;
@@ -2719,7 +2869,7 @@ namespace RobTeach.Views
                     // We should re-save this embedded content.
                     // _currentConfiguration.DxfFileContent already holds this from the load.
                     dxfContentForSaving = _currentConfiguration.DxfFileContent;
-                    Debug.WriteLine("[JULES_DEBUG] PerformSaveOperation: Re-saving existing embedded DxfFileContent.");
+                    // Debug.WriteLine("[JULES_DEBUG] PerformSaveOperation: Re-saving existing embedded DxfFileContent.");
                 }
                 else
                 {
@@ -2727,10 +2877,10 @@ namespace RobTeach.Views
                     // Or if _currentDxfFilePath was something else invalid and File.Exists was false.
                     // If _currentConfiguration.DxfFileContent has something (e.g. from a successful load before path became invalid), use it.
                     if (!string.IsNullOrEmpty(_currentConfiguration.DxfFileContent)) {
-                        Debug.WriteLine("[JULES_DEBUG] PerformSaveOperation: Using existing in-memory DxfFileContent as _currentDxfFilePath is invalid or missing for file operations.");
+                        // Debug.WriteLine("[JULES_DEBUG] PerformSaveOperation: Using existing in-memory DxfFileContent as _currentDxfFilePath is invalid or missing for file operations.");
                         dxfContentForSaving = _currentConfiguration.DxfFileContent;
                     } else {
-                        Debug.WriteLine("[JULES_DEBUG] PerformSaveOperation: No valid DXF source found, DxfFileContent will be empty for saving.");
+                        // Debug.WriteLine("[JULES_DEBUG] PerformSaveOperation: No valid DXF source found, DxfFileContent will be empty for saving.");
                         dxfContentForSaving = string.Empty;
                     }
                 }
@@ -2798,19 +2948,23 @@ namespace RobTeach.Views
                 {
                     _configService.SaveConfiguration(configToSave, saveFileDialog.FileName);
                     StatusTextBlock.Text = $"Configuration saved to {Path.GetFileName(saveFileDialog.FileName)}";
+                    AppLogger.Log($"Configuration saved to: {saveFileDialog.FileName}");
                     _currentLoadedConfigPath = saveFileDialog.FileName; // Update current loaded path
                     return true; // Save successful
                 }
                 catch (Exception ex)
                 {
                     StatusTextBlock.Text = "Error saving configuration.";
-                    MessageBox.Show($"Failed to save configuration: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    string msg = $"Failed to save configuration to {saveFileDialog.FileName}";
+                    AppLogger.Log(msg, ex, LogLevel.Error);
+                    MessageBox.Show($"{msg}: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     return false; // Save failed
                 }
             }
             else
             {
                 StatusTextBlock.Text = "Save configuration cancelled.";
+                AppLogger.Log("Save configuration cancelled by user.");
                 return false; // User cancelled SaveFileDialog
             }
         }
@@ -3036,7 +3190,7 @@ namespace RobTeach.Views
             }
 
             Debug.WriteLine($"[DEBUG] ReconcileTrajectoryEntities: Starting. Document has {currentDoc.Entities.Count()} entities.");
-            Debug.WriteLine("[JULES_DEBUG] ReconcileTrajectoryEntities: Entering method.");
+            // Debug.WriteLine("[JULES_DEBUG] ReconcileTrajectoryEntities: Entering method.");
 
             // Create a list of available entities from the document to "consume" as they are matched
             // This helps handle cases where multiple identical geometric entities might exist in the DXF,
@@ -3047,14 +3201,14 @@ namespace RobTeach.Views
             {
                 if (pass.Trajectories == null)
                 {
-                    Debug.WriteLine($"[JULES_DEBUG] ReconcileTrajectoryEntities: Pass '{pass.PassName}' has null trajectories. Skipping.");
+                    // Debug.WriteLine($"[JULES_DEBUG] ReconcileTrajectoryEntities: Pass '{pass.PassName}' has null trajectories. Skipping.");
                     continue;
                 }
-                Debug.WriteLine($"[JULES_DEBUG] ReconcileTrajectoryEntities: Processing pass '{pass.PassName}'. Initial trajectory order:");
-                for(int k=0; k < pass.Trajectories.Count; k++)
-                {
-                    Debug.WriteLine($"[JULES_DEBUG]   Pre-Reconcile: Pass[{pass.PassName}]-Trajectory[{k}]: {pass.Trajectories[k].ToString()}");
-                }
+                // Debug.WriteLine($"[JULES_DEBUG] ReconcileTrajectoryEntities: Processing pass '{pass.PassName}'. Initial trajectory order:");
+                // for(int k=0; k < pass.Trajectories.Count; k++)
+                // {
+                //     Debug.WriteLine($"[JULES_DEBUG]   Pre-Reconcile: Pass[{pass.PassName}]-Trajectory[{k}]: {pass.Trajectories[k].ToString()}");
+                // }
 
                 for (int i = 0; i < pass.Trajectories.Count; i++)
                 {
@@ -3091,14 +3245,14 @@ namespace RobTeach.Views
                         Debug.WriteLine($"[WARNING] ReconcileTrajectoryEntities: Could not find a matching live entity for deserialized {trajectory.OriginalDxfEntity.GetType().Name}.");
                     }
                 }
-                Debug.WriteLine($"[JULES_DEBUG] ReconcileTrajectoryEntities: Finished processing pass '{pass.PassName}'. Final trajectory order for this pass:");
-                for(int k=0; k < pass.Trajectories.Count; k++)
-                {
-                    Debug.WriteLine($"[JULES_DEBUG]   Post-Reconcile: Pass[{pass.PassName}]-Trajectory[{k}]: {pass.Trajectories[k].ToString()}");
-                }
+                // Debug.WriteLine($"[JULES_DEBUG] ReconcileTrajectoryEntities: Finished processing pass '{pass.PassName}'. Final trajectory order for this pass:");
+                // for(int k=0; k < pass.Trajectories.Count; k++)
+                // {
+                //     Debug.WriteLine($"[JULES_DEBUG]   Post-Reconcile: Pass[{pass.PassName}]-Trajectory[{k}]: {pass.Trajectories[k].ToString()}");
+                // }
             }
             Debug.WriteLine("[DEBUG] ReconcileTrajectoryEntities: Finished.");
-            Debug.WriteLine("[JULES_DEBUG] ReconcileTrajectoryEntities: Exiting method.");
+            // Debug.WriteLine("[JULES_DEBUG] ReconcileTrajectoryEntities: Exiting method.");
         }
 
 
