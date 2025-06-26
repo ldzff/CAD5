@@ -2103,6 +2103,23 @@ namespace RobTeach.Views
             // If status is 1, proceed with sending data.
             Debug.WriteLine($"[JULES_DEBUG] SendToRobotButton_Click: Robot status is 1 (Ready). Proceeding to send configuration.");
 
+            // --- Write data to temporary file ---
+            try
+            {
+                string tempFilePath = WriteSendDataToTempFile(_currentConfiguration);
+                StatusTextBlock.Text = $"Data for robot written to {tempFilePath}";
+                // Optionally, inform ModbusStatusTextBlock as well or use a more prominent display
+                // ModbusStatusTextBlock.Text = $"Data also written to {Path.GetFileName(tempFilePath)}";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error writing data to temporary file: {ex.Message}", "File Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusTextBlock.Text = "Error writing data to temp file. Sending aborted.";
+                return; // Abort sending if file writing fails
+            }
+            // --- End of write data to temporary file ---
+
+
             // Ensure points are populated for the trajectories in the current pass
             if (_currentConfiguration.CurrentPassIndex >= 0 &&
                 _currentConfiguration.CurrentPassIndex < _currentConfiguration.SprayPasses.Count)
@@ -2119,6 +2136,8 @@ namespace RobTeach.Views
             else if (_currentConfiguration.SprayPasses == null || _currentConfiguration.SprayPasses.Count == 0)
             {
                 // No spray passes, so nothing to populate. SendConfiguration will handle this.
+                 MessageBox.Show("No spray passes in the current configuration to send.", "Configuration Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
             else
             {
@@ -3196,6 +3215,138 @@ namespace RobTeach.Views
                 return new Rect(minX, minY, maxX - minX, maxY - minY);
             }
             return Rect.Empty;
+        }
+
+        private void WritePointData(StreamWriter writer, DxfPoint point, float rx = 0f, float ry = 0f, float rz = 0f)
+        {
+            writer.WriteLine(((float)point.X).ToString("F3"));
+            writer.WriteLine(((float)point.Y).ToString("F3"));
+            writer.WriteLine(((float)point.Z).ToString("F3"));
+            writer.WriteLine(rx.ToString("F3"));
+            writer.WriteLine(ry.ToString("F3"));
+            writer.WriteLine(rz.ToString("F3"));
+        }
+
+        private void WriteTrajectoryPointWithAnglesData(StreamWriter writer, TrajectoryPointWithAngles point)
+        {
+            writer.WriteLine(((float)point.Coordinates.X).ToString("F3"));
+            writer.WriteLine(((float)point.Coordinates.Y).ToString("F3"));
+            writer.WriteLine(((float)point.Coordinates.Z).ToString("F3"));
+            writer.WriteLine(((float)point.Rx).ToString("F3"));
+            writer.WriteLine(((float)point.Ry).ToString("F3"));
+            writer.WriteLine(((float)point.Rz).ToString("F3"));
+        }
+
+
+        private string WriteSendDataToTempFile(Models.Configuration config)
+        {
+            string tempFileName = $"RobTeach_SendData_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt";
+            string tempFilePath = Path.Combine(Path.GetTempPath(), tempFileName);
+
+            using (StreamWriter writer = new StreamWriter(tempFilePath))
+            {
+                // 1. Total Number of Passes
+                writer.WriteLine(((float)config.SprayPasses.Count).ToString("F3"));
+
+                int passIndex = 0;
+                foreach (var pass in config.SprayPasses)
+                {
+                    passIndex++; // For user display or if pass index is needed in file, though not specified
+
+                    // 2.a. Number of Primitives in Pass
+                    writer.WriteLine(((float)pass.Trajectories.Count).ToString("F3"));
+
+                    int primitiveIndexInPass = 0;
+                    foreach (var trajectory in pass.Trajectories)
+                    {
+                        primitiveIndexInPass++;
+
+                        // 2.b.i. Primitive Index
+                        writer.WriteLine(((float)primitiveIndexInPass).ToString("F3"));
+
+                        // 2.b.ii. Primitive Type
+                        float primitiveType = 0.0f;
+                        if (trajectory.PrimitiveType == "Line") primitiveType = 1.0f;
+                        else if (trajectory.PrimitiveType == "Circle") primitiveType = 2.0f;
+                        else if (trajectory.PrimitiveType == "Arc") primitiveType = 3.0f;
+                        writer.WriteLine(primitiveType.ToString("F3"));
+
+                        // 2.b.iii. Upper Nozzle Gas
+                        writer.WriteLine((trajectory.UpperNozzleGasOn ? 11.0f : 10.0f).ToString("F3"));
+                        // 2.b.iv. Upper Nozzle Liquid
+                        writer.WriteLine((trajectory.UpperNozzleLiquidOn ? 12.0f : 10.0f).ToString("F3"));
+                        // 2.b.v. Lower Nozzle Gas
+                        writer.WriteLine((trajectory.LowerNozzleGasOn ? 21.0f : 20.0f).ToString("F3"));
+                        // 2.b.vi. Lower Nozzle Liquid
+                        writer.WriteLine((trajectory.LowerNozzleLiquidOn ? 22.0f : 20.0f).ToString("F3"));
+
+                        // 2.b.vii. End Effector Speed (Runtime)
+                        writer.WriteLine(((float)trajectory.Runtime).ToString("F3"));
+
+                        // 2.b.viii. Primitive Geometry Data
+                        if (trajectory.PrimitiveType == "Line")
+                        {
+                            WritePointData(writer, trajectory.LineStartPoint); // Rx, Ry, Rz default to 0
+                            WritePointData(writer, trajectory.LineEndPoint);   // Rx, Ry, Rz default to 0
+                        }
+                        else if (trajectory.PrimitiveType == "Arc")
+                        {
+                            if (trajectory.ArcPoint1 == null || trajectory.ArcPoint2 == null || trajectory.ArcPoint3 == null)
+                            {
+                                // Write placeholder zeros if arc points are somehow null
+                                for(int i=0; i < 3 * 6; i++) writer.WriteLine(0.0f.ToString("F3")); // 3 points * 6 floats
+                            }
+                            else
+                            {
+                                WriteTrajectoryPointWithAnglesData(writer, trajectory.ArcPoint1);
+
+                                var arcParams = GeometryUtils.CalculateArcParametersFromThreePoints(
+                                    trajectory.ArcPoint1.Coordinates,
+                                    trajectory.ArcPoint2.Coordinates,
+                                    trajectory.ArcPoint3.Coordinates);
+
+                                if (arcParams.HasValue)
+                                {
+                                    // Center point with Z from P1, Rx,Ry,Rz = 0
+                                    DxfPoint centerPointWithP1Z = new DxfPoint(arcParams.Value.Center.X, arcParams.Value.Center.Y, trajectory.ArcPoint1.Coordinates.Z);
+                                    WritePointData(writer, centerPointWithP1Z);
+                                }
+                                else
+                                {
+                                     // Fallback: Write zeros for center point if calculation fails
+                                    for(int i=0; i < 6; i++) writer.WriteLine(0.0f.ToString("F3"));
+                                }
+                                WriteTrajectoryPointWithAnglesData(writer, trajectory.ArcPoint3);
+                            }
+                        }
+                        else if (trajectory.PrimitiveType == "Circle")
+                        {
+                             if (trajectory.CirclePoint1 == null || trajectory.OriginalCircleCenter == null || trajectory.CirclePoint3 == null)
+                             {
+                                // Write placeholder zeros if circle points are somehow null
+                                for(int i=0; i < 3 * 6; i++) writer.WriteLine(0.0f.ToString("F3")); // 3 points * 6 floats
+                             }
+                             else
+                             {
+                                WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint1);
+                                WritePointData(writer, trajectory.OriginalCircleCenter); // Rx, Ry, Rz default to 0 for center
+                                WriteTrajectoryPointWithAnglesData(writer, trajectory.CirclePoint3);
+                             }
+                        }
+                        else // Unknown primitive type
+                        {
+                            // Write placeholder zeros for geometry
+                             for(int i=0; i < 2 * 6; i++) writer.WriteLine(0.0f.ToString("F3")); // Default to 2 points * 6 floats like a line
+                        }
+
+                        // 2.b.ix. Reserved Values
+                        writer.WriteLine(0.0f.ToString("F3"));
+                        writer.WriteLine(0.0f.ToString("F3"));
+                        writer.WriteLine(0.0f.ToString("F3"));
+                    }
+                }
+            }
+            return tempFilePath;
         }
     }
 }
