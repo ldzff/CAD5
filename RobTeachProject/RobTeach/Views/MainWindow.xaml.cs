@@ -3310,8 +3310,21 @@ namespace RobTeach.Views
                         // 2.b.vi. Lower Nozzle Liquid
                         writer.WriteLine((trajectory.LowerNozzleLiquidOn ? 22.0f : 20.0f).ToString("F3"));
 
-                        // 2.b.vii. End Effector Speed (Runtime)
-                        writer.WriteLine(((float)trajectory.Runtime).ToString("F3"));
+                        // 2.b.vii. End Effector Speed (Calculated: Length / Runtime)
+                        double lengthInMeters = TrajectoryUtils.CalculateTrajectoryLength(trajectory);
+                        double currentRuntime = trajectory.Runtime;
+                        float speedForRobot = 0.0f;
+
+                        if (lengthInMeters > 0.00001) // If length is significant
+                        {
+                            if (currentRuntime > 0.00001) // If runtime is significant
+                            {
+                                speedForRobot = (float)(lengthInMeters / currentRuntime);
+                            }
+                            // Else: runtime is zero/tiny, length is not. Speed remains 0.0f (implying problem or stop)
+                        }
+                        // Else: length is zero/tiny. Speed remains 0.0f.
+                        writer.WriteLine(speedForRobot.ToString("F3"));
 
                         // 2.b.viii. Primitive Geometry Data
                         if (trajectory.PrimitiveType == "Line")
