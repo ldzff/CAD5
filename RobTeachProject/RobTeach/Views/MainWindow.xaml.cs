@@ -2457,13 +2457,11 @@ namespace RobTeach.Views
             // Align content to the top-left with a small padding
             double targetTranslateX = -(_dxfBoundingBox.X * scale); // Align left edge of content with left edge of canvas
             const double topPadding = 5.0; // Define a small padding from the top of the canvas
-            double targetTranslateY = topPadding -(_dxfBoundingBox.Y * scale);
-            // This still aligns the bounding box top, but ensures it's at worst at Y=topPadding if _dxfBoundingBox.Y is 0.
-            // If the diagnostic Y=0 worked, and original -(_dxfBoundingBox.Y * scale) didn't,
-            // it implies -(_dxfBoundingBox.Y * scale) was too negative.
-            // Let's try a simpler version that worked for the diagnostic: Y=0 of DXF to Y=padding of canvas.
-            // This means the Y-origin of the DXF drawing is placed at Y=topPadding on the canvas.
-            targetTranslateY = topPadding; // All DXFs will start rendering their Y=0 coordinate at Y=topPadding of canvas.
+            // Correctly handle negative _dxfBoundingBox.Y to bring the topmost part of the drawing into view
+            double targetTranslateY = topPadding - (_dxfBoundingBox.Y * scale);
+
+            // The problematic line below is removed:
+            // targetTranslateY = topPadding; // All DXFs will start rendering their Y=0 coordinate at Y=topPadding of canvas.
 
             _translateTransform.X = targetTranslateX;
             _translateTransform.Y = targetTranslateY;
