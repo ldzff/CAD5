@@ -3086,7 +3086,7 @@ namespace RobTeach.Views
                         // For now, use center +/- major axis length as a rough estimate if axes are aligned.
                         // This is a very rough approximation.
                         AppLogger.Log($"CalculateEntityBoundsSimple: DxfEllipse found. Simplified bounds used.", LogLevel.Debug);
-                        var majAxisLength = ellipse.MajorAxis.Length();
+                        var majAxisLength = ellipse.MajorAxis.Length; // Corrected: Length is a property
                         return (ellipse.Center.X - majAxisLength, ellipse.Center.Y - majAxisLength,
                                 ellipse.Center.X + majAxisLength, ellipse.Center.Y + majAxisLength);
 
