@@ -2376,30 +2376,46 @@ namespace RobTeach.Views
             // Calculate bounds directly from entities
             if (dxfDoc.Entities != null && dxfDoc.Entities.Any())
             {
+                AppLogger.Log($"GetDxfBoundingBox: Processing {dxfDoc.Entities.Count()} entities.", LogLevel.Debug);
+                int entityIndex = 0;
                 foreach (var entity in dxfDoc.Entities)
                 {
-                    if (entity == null) continue;
+                    if (entity == null)
+                    {
+                        AppLogger.Log($"GetDxfBoundingBox: Entity at index {entityIndex} is null, skipping.", LogLevel.Debug);
+                        entityIndex++;
+                        continue;
+                    }
 
                     try
                     {
                         // Calculate entity bounds directly
-                        var bounds = CalculateEntityBoundsSimple(entity);
-                        if (bounds.HasValue)
+                        var boundsTuple = CalculateEntityBoundsSimple(entity);
+                        string boundsStr = "null";
+                        if (boundsTuple.HasValue)
                         {
-                            var (eMinX, eMinY, eMaxX, eMaxY) = bounds.Value;
-                            minX = Math.Min(minX, eMinX);
-                            minY = Math.Min(minY, eMinY);
-                            maxX = Math.Max(maxX, eMaxX);
-                            maxY = Math.Max(maxY, eMaxY);
+                            var (eMinX_val, eMinY_val, eMaxX_val, eMaxY_val) = boundsTuple.Value;
+                            boundsStr = $"X:[{eMinX_val:F2} to {eMaxX_val:F2}], Y:[{eMinY_val:F2} to {eMaxY_val:F2}]";
+
+                            minX = Math.Min(minX, eMinX_val);
+                            minY = Math.Min(minY, eMinY_val);
+                            maxX = Math.Max(maxX, eMaxX_val);
+                            maxY = Math.Max(maxY, eMaxY_val);
                             hasValidBounds = true;
                         }
+                        AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:{entity.GetType().Name}, Bounds:{boundsStr}. Cumulative MinX:{minX:F2}, MinY:{minY:F2}, MaxX:{maxX:F2}, MaxY:{maxY:F2}", LogLevel.Debug);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        AppLogger.Log($"GetDxfBoundingBox: Error processing entity at index {entityIndex}, Type:{entity.GetType().Name}. Error: {ex.Message}", LogLevel.Warning);
                         // Skip entities that can't be processed
-                        continue;
                     }
+                    entityIndex++;
                 }
+            }
+            else
+            {
+                AppLogger.Log("GetDxfBoundingBox: No entities found in DXF or Entities collection is null.", LogLevel.Debug);
             }
 
             if (!hasValidBounds)
@@ -2414,8 +2430,9 @@ namespace RobTeach.Views
         private void PerformFitToView()
         {
             Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
+            AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
             Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
-            Debug.WriteLine($"[DEBUG] PerformFitToView: _dxfBoundingBox={_dxfBoundingBox.ToString()}");
+            // Debug.WriteLine($"[DEBUG] PerformFitToView: _dxfBoundingBox={_dxfBoundingBox.ToString()}"); // Replaced by AppLogger
 
             if (_dxfBoundingBox.IsEmpty || CadCanvas.ActualWidth == 0 || CadCanvas.ActualHeight == 0)
             {
@@ -3054,12 +3071,46 @@ namespace RobTeach.Views
                         }
                         return (polyMinX, polyMinY, polyMaxX, polyMaxY);
 
+                    case DxfInsert insert:
+                        // TODO: Proper handling for DxfInsert (Blocks) is complex.
+                        // It requires iterating entities within the block definition,
+                        // applying the insert's transformation (translation, scale, rotation),
+                        // and calculating the union of their transformed bounds.
+                        // For now, just use its insertion point as a minimal bound.
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert found (Name: {insert.Name}, InsPt: {insert.InsertionPoint}). Simplified bounds used.", LogLevel.Debug);
+                        return (insert.InsertionPoint.X, insert.InsertionPoint.Y, insert.InsertionPoint.X, insert.InsertionPoint.Y);
+
+                    case DxfEllipse ellipse:
+                        // TODO: Implement proper bounding box for DxfEllipse
+                        // Based on center, major/minor axis, start/end params.
+                        // For now, use center +/- major axis length as a rough estimate if axes are aligned.
+                        // This is a very rough approximation.
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfEllipse found. Simplified bounds used.", LogLevel.Debug);
+                        var majAxisLength = ellipse.MajorAxis.Length();
+                        return (ellipse.Center.X - majAxisLength, ellipse.Center.Y - majAxisLength,
+                                ellipse.Center.X + majAxisLength, ellipse.Center.Y + majAxisLength);
+
+                    case DxfSpline spline:
+                        // TODO: Implement proper bounding box for DxfSpline (NURBS)
+                        // Often approximated by the bounds of its control points or fit points.
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfSpline found. No bounds calculation implemented yet, returning null.", LogLevel.Debug);
+                        // Example (if using control points):
+                        // if (spline.ControlPoints == null || !spline.ControlPoints.Any()) return null;
+                        // double sMinX = spline.ControlPoints.Min(p => p.X);
+                        // double sMinY = spline.ControlPoints.Min(p => p.Y);
+                        // double sMaxX = spline.ControlPoints.Max(p => p.X);
+                        // double sMaxY = spline.ControlPoints.Max(p => p.Y);
+                        // return (sMinX, sMinY, sMaxX, sMaxY);
+                        return null; // Placeholder
+
                     default:
+                        AppLogger.Log($"CalculateEntityBoundsSimple: Unhandled entity type {entity.GetType().Name}, returning null bounds.", LogLevel.Debug);
                         return null;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                AppLogger.Log($"CalculateEntityBoundsSimple: Error calculating bounds for entity type {entity?.GetType().Name}. Error: {ex.Message}", LogLevel.Warning);
                 return null;
             }
         }
