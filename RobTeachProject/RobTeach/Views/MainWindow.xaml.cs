@@ -3616,6 +3616,9 @@ namespace RobTeach.Views
                 return;
             }
 
+            // Add 50ms delay
+            System.Threading.Thread.Sleep(50);
+
             // Trigger Test Run (Address 1002)
             ushort triggerAddress = 1002;
             short triggerValue = 33;
