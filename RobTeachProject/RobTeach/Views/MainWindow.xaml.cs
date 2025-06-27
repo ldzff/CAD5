@@ -176,6 +176,10 @@ namespace RobTeach.Views
             // Event handler for ProductNameTextBox LostFocus (assuming XAML TextChanged might remain for isDirty)
             ProductNameTextBox.LostFocus += ProductNameTextBox_LostFocus;
 
+            // Test Run Button
+            StartTestRunButton.IsEnabled = false; // Initial state
+            StartTestRunButton.Click += StartTestRunButton_Click; // Wire up the event handler
+
             RefreshCurrentPassTrajectoriesListBox();
             UpdateSelectedTrajectoryDetailUI(); // Initial call (renamed)
             RefreshCadCanvasHighlights(); // Initial call for canvas highlights
@@ -1523,6 +1527,7 @@ namespace RobTeach.Views
                     // If it needed to be set immediately, it would be here, but it's better tied to the completion of fitting.
                     UpdateDirectionIndicator(); // Update after loading and potential default selections
                     UpdateOrderNumberLabels();
+                    StartTestRunButton.IsEnabled = false; // New DXF loaded, robot program state is now unknown/stale
                 } else {
                     StatusTextBlock.Text = "DXF loading cancelled.";
                     AppLogger.Log("DXF loading cancelled by user.");
@@ -2118,6 +2123,7 @@ namespace RobTeach.Views
                     StatusTextBlock.Text = $"Configuration loaded from {Path.GetFileName(openFileDialog.FileName)}";
                     AppLogger.Log($"Successfully loaded configuration: {Path.GetFileName(openFileDialog.FileName)}");
                     _currentLoadedConfigPath = openFileDialog.FileName;
+                    StartTestRunButton.IsEnabled = false; // New config loaded, robot program state is now unknown/stale
                 }
                 catch (Exception ex)
                 {
@@ -2176,6 +2182,7 @@ namespace RobTeach.Views
                 ModbusConnectButton.IsEnabled = false;
                 ModbusDisconnectButton.IsEnabled = true;
                 SendToRobotButton.IsEnabled = true;
+                // StartTestRunButton remains disabled until data is sent and robot state is confirmed
                 StatusTextBlock.Text = "Successfully connected to Modbus server.";
             }
             else
@@ -2183,6 +2190,7 @@ namespace RobTeach.Views
                 AppLogger.Log($"Modbus connection failed to {ipAddress}:{port}. Message: {response.Message}", LogLevel.Error);
                 ModbusStatusIndicatorEllipse.Fill = Brushes.Red;
                 StatusTextBlock.Text = "Failed to connect to Modbus server.";
+                StartTestRunButton.IsEnabled = false;
             }
         }
 
@@ -2195,6 +2203,7 @@ namespace RobTeach.Views
             ModbusConnectButton.IsEnabled = true;
             ModbusDisconnectButton.IsEnabled = false;
             SendToRobotButton.IsEnabled = false;
+            StartTestRunButton.IsEnabled = false; // Disable on disconnect
             StatusTextBlock.Text = "Disconnected from Modbus server.";
         }
 
@@ -2337,12 +2346,14 @@ namespace RobTeach.Views
                 AppLogger.Log($"Configuration successfully sent to robot. Modbus response: {response.Message}");
                 StatusTextBlock.Text = "Configuration successfully sent to robot.";
                 ModbusStatusTextBlock.Text = response.Message; // Keep specific Modbus status updated too
+                StartTestRunButton.IsEnabled = true; // Enable after successful send
             }
             else
             {
                 AppLogger.Log($"Failed to send configuration to robot. Modbus response: {response.Message}", LogLevel.Error);
                 StatusTextBlock.Text = $"Failed to send configuration: {response.Message}";
                 ModbusStatusTextBlock.Text = response.Message; // Update Modbus status as well
+                StartTestRunButton.IsEnabled = false;
             }
         }
 
@@ -3550,6 +3561,79 @@ namespace RobTeach.Views
                 }
             }
             return dataFilePath; // Return the actual path where the file is saved
+        }
+
+        private void StartTestRunButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_modbusService.IsConnected)
+            {
+                string msg = "Not connected to Modbus server. Please connect first to start a test run.";
+                AppLogger.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Modbus Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Check Robot Status (Address 1000)
+            ushort robotStatusAddress = 1000;
+            ModbusReadInt16Result statusResult = _modbusService.ReadHoldingRegisterInt16(robotStatusAddress);
+
+            if (!statusResult.Success)
+            {
+                string msg = $"Failed to read robot status for test run: {statusResult.Message}";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Modbus Read Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            short robotStatus = statusResult.Value;
+            if (robotStatus != 1) // 1 means stopped/ready
+            {
+                string msg = $"Cannot start test run: Robot is not in a stopped/ready state (Current status at {robotStatusAddress}: {robotStatus}).";
+                AppLogger.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Robot Not Ready", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Determine selected speed mode and set it (Address 1001)
+            ushort speedModeAddress = 1001;
+            int speedModeValue = 11; // Default to Slow Speed (11)
+            string speedModeName = "Slow";
+
+            if (StandardSpeedRadioButton.IsChecked == true)
+            {
+                speedModeValue = 22; // Standard Speed (22)
+                speedModeName = "Standard";
+            }
+
+            AppLogger.Log($"Setting speed mode for Test Run to {speedModeName} (Value: {speedModeValue}) at address {speedModeAddress}.");
+            ModbusResponse speedSetResponse = _modbusService.WriteHoldingRegisterInt16(speedModeAddress, (short)speedModeValue);
+
+            if (!speedSetResponse.Success)
+            {
+                string msg = $"Failed to set speed mode on robot for test run: {speedSetResponse.Message}";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Modbus Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Trigger Test Run (Address 1002)
+            ushort triggerAddress = 1002;
+            short triggerValue = 33;
+            AppLogger.Log($"Triggering Test Run (Value: {triggerValue}) at address {triggerAddress}.");
+            ModbusResponse triggerResponse = _modbusService.WriteHoldingRegisterInt16(triggerAddress, triggerValue);
+
+            if (!triggerResponse.Success)
+            {
+                string msg = $"Failed to trigger test run on robot: {triggerResponse.Message}";
+                AppLogger.Log(msg, LogLevel.Error);
+                MessageBox.Show(msg, "Modbus Write Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            else
+            {
+                AppLogger.Log($"Test run ({speedModeName} speed) initiated successfully.");
+                StatusTextBlock.Text = $"Test run ({speedModeName} speed) initiated.";
+                MessageBox.Show($"Test run ({speedModeName} speed) initiated successfully.", "Test Run Started", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
     }
 }

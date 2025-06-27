@@ -112,6 +112,18 @@
                 </StackPanel>
             </GroupBox>
 
+            <!-- New Test Run Control GroupBox -->
+            <GroupBox Header="Test Run Control" Margin="5,0,0,0" Padding="5" VerticalAlignment="Top" Foreground="{StaticResource DefaultTextBrush}">
+                <StackPanel Orientation="Vertical">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                        <Label Content="Speed Mode:" VerticalAlignment="Center" Foreground="{StaticResource DefaultTextBrush}"/>
+                        <RadioButton Name="SlowSpeedRadioButton" Content="Slow Speed" GroupName="TestRunSpeedMode" IsChecked="True" VerticalAlignment="Center" Margin="5,0" Foreground="{StaticResource DefaultTextBrush}"/>
+                        <RadioButton Name="StandardSpeedRadioButton" Content="Standard Speed" GroupName="TestRunSpeedMode" VerticalAlignment="Center" Margin="5,0" Foreground="{StaticResource DefaultTextBrush}"/>
+                    </StackPanel>
+                    <Button Name="StartTestRunButton" Content="Start Test Run" Padding="5" IsEnabled="False"/>
+                </StackPanel>
+            </GroupBox>
+
             </StackPanel>
         </ScrollViewer>
 
