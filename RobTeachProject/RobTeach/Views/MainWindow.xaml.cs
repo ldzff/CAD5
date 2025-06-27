@@ -3565,6 +3565,25 @@ namespace RobTeach.Views
 
         private void StartTestRunButton_Click(object sender, RoutedEventArgs e)
         {
+            // Determine selected speed mode for the confirmation message
+            string selectedSpeedModeName = "Slow"; // Default
+            if (StandardSpeedRadioButton.IsChecked == true)
+            {
+                selectedSpeedModeName = "Standard";
+            }
+
+            string confirmationMessage = $"The robot will start a test run in '{selectedSpeedModeName} Speed' mode. Please ensure the robot's workspace is clear of any obstructions or personnel.\n\nDo you want to proceed?";
+            MessageBoxResult confirmResult = MessageBox.Show(confirmationMessage, "Confirm Test Run", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+            if (confirmResult == MessageBoxResult.No)
+            {
+                AppLogger.Log("Test run cancelled by user at confirmation dialog.");
+                StatusTextBlock.Text = "Test run cancelled by user.";
+                return;
+            }
+
+            AppLogger.Log($"User confirmed test run initiation ({selectedSpeedModeName} speed).");
+
             if (!_modbusService.IsConnected)
             {
                 string msg = "Not connected to Modbus server. Please connect first to start a test run.";
