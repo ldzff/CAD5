@@ -3076,9 +3076,9 @@ namespace RobTeach.Views
                         // It requires iterating entities within the block definition,
                         // applying the insert's transformation (translation, scale, rotation),
                         // and calculating the union of their transformed bounds.
-                        // For now, just use its insertion point as a minimal bound.
-                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert found (Name: {insert.Name}, InsPt: {insert.InsertionPoint}). Simplified bounds used.", LogLevel.Debug);
-                        return (insert.InsertionPoint.X, insert.InsertionPoint.Y, insert.InsertionPoint.X, insert.InsertionPoint.Y);
+                        // For now, just use its location as a minimal bound.
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert found (Name: {insert.Name}, Location: {insert.Location}). Simplified bounds used.", LogLevel.Debug);
+                        return (insert.Location.X, insert.Location.Y, insert.Location.X, insert.Location.Y);
 
                     case DxfEllipse ellipse:
                         // TODO: Implement proper bounding box for DxfEllipse
