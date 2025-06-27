@@ -243,5 +243,42 @@ namespace RobTeach.Services
                 return ModbusReadInt16Result.Fail($"An unexpected error occurred while reading Modbus data from address {address}: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Writes a single 16-bit signed integer to a Modbus holding register.
+        /// </summary>
+        /// <param name="address">The Modbus address (0-based) of the holding register to write.</param>
+        /// <param name="value">The short (Int16) value to write.</param>
+        /// <returns>A <see cref="ModbusResponse"/> indicating the success or failure of the write operation.</returns>
+        public ModbusResponse WriteSingleShortRegister(ushort address, short value)
+        {
+            if (!IsConnected)
+            {
+                return ModbusResponse.Fail("Error: Not connected to Modbus server.");
+            }
+
+            try
+            {
+                // EasyModbus WriteSingleRegister takes int for address and value.
+                // The value is treated as a 16-bit word.
+                modbusClient!.WriteSingleRegister(address, value);
+                return ModbusResponse.Ok($"Successfully wrote value {value} to address {address}.");
+            }
+            catch (System.IO.IOException ioEx)
+            {
+                 Debug.WriteLine($"[ModbusService] IO error during write to address {address}: {ioEx.ToString()}");
+                 return ModbusResponse.Fail($"IO error writing Modbus data to address {address}: {ioEx.Message}");
+            }
+            catch (EasyModbus.Exceptions.ModbusException modEx)
+            {
+                 Debug.WriteLine($"[ModbusService] Modbus protocol error during write to address {address}: {modEx.ToString()}");
+                 return ModbusResponse.Fail($"Modbus protocol error writing to address {address}: {modEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ModbusService] General error during write to address {address}: {ex.ToString()}");
+                return ModbusResponse.Fail($"An unexpected error occurred while writing Modbus data to address {address}: {ex.Message}");
+            }
+        }
     }
 }

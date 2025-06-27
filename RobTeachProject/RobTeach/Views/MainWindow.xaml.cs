@@ -3606,7 +3606,7 @@ namespace RobTeach.Views
             }
 
             AppLogger.Log($"Setting speed mode for Test Run to {speedModeName} (Value: {speedModeValue}) at address {speedModeAddress}.");
-            ModbusResponse speedSetResponse = _modbusService.WriteHoldingRegisterInt16(speedModeAddress, (short)speedModeValue);
+            ModbusResponse speedSetResponse = _modbusService.WriteSingleShortRegister(speedModeAddress, (short)speedModeValue);
 
             if (!speedSetResponse.Success)
             {
@@ -3620,7 +3620,7 @@ namespace RobTeach.Views
             ushort triggerAddress = 1002;
             short triggerValue = 33;
             AppLogger.Log($"Triggering Test Run (Value: {triggerValue}) at address {triggerAddress}.");
-            ModbusResponse triggerResponse = _modbusService.WriteHoldingRegisterInt16(triggerAddress, triggerValue);
+            ModbusResponse triggerResponse = _modbusService.WriteSingleShortRegister(triggerAddress, triggerValue);
 
             if (!triggerResponse.Success)
             {
