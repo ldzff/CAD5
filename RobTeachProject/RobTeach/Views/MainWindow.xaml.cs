@@ -1535,7 +1535,7 @@ namespace RobTeach.Views
                         AppLogger.Log($"Successfully loaded DXF: {Path.GetFileName(_currentDxfFilePath)}");
                         if (_currentDxfDocument?.Header != null)
                         {
-                            AppLogger.Log($"DXF Header Units: {_currentDxfDocument.Header.Units}", LogLevel.Info);
+                            AppLogger.Log($"DXF Header Units: {_currentDxfDocument.Header.DefaultDrawingUnits}", LogLevel.Info);
                         }
                         isConfigurationDirty = false; // Set dirty flag only after successful load and fit
                         Debug.WriteLine("[DEBUG] LoadDxfButton_Click (Dispatcher): PerformFitToView completed.");
