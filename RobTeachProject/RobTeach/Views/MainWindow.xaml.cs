@@ -2475,12 +2475,10 @@ namespace RobTeach.Views
             Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
             AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
             Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
-            // Debug.WriteLine($"[DEBUG] PerformFitToView: _dxfBoundingBox={_dxfBoundingBox.ToString()}"); // Replaced by AppLogger
 
             if (_dxfBoundingBox.IsEmpty || CadCanvas.ActualWidth == 0 || CadCanvas.ActualHeight == 0)
             {
                 Debug.WriteLine("[DEBUG] PerformFitToView: BoundingBox is empty or Canvas size is zero. Resetting transforms.");
-                // Reset to default if no content or canvas not ready
                 _scaleTransform.ScaleX = 1;
                 _scaleTransform.ScaleY = 1;
                 _translateTransform.X = 0;
@@ -2498,7 +2496,12 @@ namespace RobTeach.Views
             if (contentWidth == 0 || contentHeight == 0)
             {
                 Debug.WriteLine("[DEBUG] PerformFitToView: ContentWidth or ContentHeight is zero. Exiting.");
-                return; // Avoid division by zero
+                // Reset to default rather than leaving transforms in an unknown state
+                _scaleTransform.ScaleX = 1;
+                _scaleTransform.ScaleY = 1;
+                _translateTransform.X = 0;
+                _translateTransform.Y = 0;
+                return;
             }
 
             // Calculate scale to fit content within canvas, maintaining aspect ratio
@@ -2506,30 +2509,29 @@ namespace RobTeach.Views
             double scaleY = canvasHeight / contentHeight;
             double scale = Math.Min(scaleX, scaleY);
 
-            // Apply a margin, e.g., 5% of the canvas dimension
-            double marginFactor = 0.95;
-            double initialScale = scale; // Log scale before margin
+            // Apply a margin, e.g., 10% of the canvas dimension
+            double marginFactor = 0.90;
             scale *= marginFactor;
 
             AppLogger.Log($"PerformFitToView: Canvas(W:{canvasWidth:F2}, H:{canvasHeight:F2}), Content(W:{contentWidth:F2}, H:{contentHeight:F2})", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView: ScaleX_raw={scaleX:F4}, ScaleY_raw={scaleY:F4}, InitialMinScale={initialScale:F4}, MarginFactor={marginFactor}, FinalScale={scale:F4}", LogLevel.Debug);
-            // Debug.WriteLine($"[DEBUG] PerformFitToView: Calculated scaleX={scaleX}, scaleY={scaleY}, final scale (with margin)={scale}"); // Replaced by AppLogger
+            AppLogger.Log($"PerformFitToView: ScaleX_raw={scaleX:F4}, ScaleY_raw={scaleY:F4}, FinalScale={scale:F4}", LogLevel.Debug);
 
             _scaleTransform.ScaleX = scale;
-            _scaleTransform.ScaleY = scale; // Maintain aspect ratio
+            _scaleTransform.ScaleY = -scale; // Invert Y-axis for CAD coordinate system (Y up)
 
-            // Align content to the top-left with a small padding
-            double targetTranslateX = -(_dxfBoundingBox.X * scale); // Align left edge of content with left edge of canvas
-            const double topPadding = 5.0; // Define a small padding from the top of the canvas
-            // Correctly handle negative _dxfBoundingBox.Y to bring the topmost part of the drawing into view
-            double targetTranslateY = topPadding - (_dxfBoundingBox.Y * scale);
+            // Calculate the center of the DXF bounding box
+            double contentCenterX = _dxfBoundingBox.X + _dxfBoundingBox.Width / 2.0;
+            double contentCenterY = _dxfBoundingBox.Y + _dxfBoundingBox.Height / 2.0;
 
-            // The problematic line below is removed:
-            // targetTranslateY = topPadding; // All DXFs will start rendering their Y=0 coordinate at Y=topPadding of canvas.
+            double targetTranslateX = (canvasWidth / 2.0) - (contentCenterX * _scaleTransform.ScaleX);
+            double targetTranslateY = (canvasHeight / 2.0) - (contentCenterY * _scaleTransform.ScaleY);
 
             _translateTransform.X = targetTranslateX;
             _translateTransform.Y = targetTranslateY;
-            Debug.WriteLine($"[DEBUG] PerformFitToView: TargetTranslateX (Left Aligned)={targetTranslateX}, TargetTranslateY (Top Padded to {topPadding})={targetTranslateY}");
+
+            Debug.WriteLine($"[DEBUG] PerformFitToView: ScaleX={_scaleTransform.ScaleX:F4}, ScaleY={_scaleTransform.ScaleY:F4}");
+            Debug.WriteLine($"[DEBUG] PerformFitToView: ContentCenter=({contentCenterX:F2}, {contentCenterY:F2})");
+            Debug.WriteLine($"[DEBUG] PerformFitToView: TargetTranslateX={targetTranslateX:F2}, TargetTranslateY={targetTranslateY:F2}");
 
             StatusTextBlock.Text = "View fitted to content.";
             Debug.WriteLine("[DEBUG] PerformFitToView: Completed.");
