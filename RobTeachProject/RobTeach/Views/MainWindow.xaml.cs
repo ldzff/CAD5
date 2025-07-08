@@ -1533,6 +1533,10 @@ namespace RobTeach.Views
                         PerformFitToView();
                         StatusTextBlock.Text = $"Loaded: {Path.GetFileName(_currentDxfFilePath)}. Click shapes to select.";
                         AppLogger.Log($"Successfully loaded DXF: {Path.GetFileName(_currentDxfFilePath)}");
+                        if (_currentDxfDocument?.Header != null)
+                        {
+                            AppLogger.Log($"DXF Header Units: {_currentDxfDocument.Header.Units}", LogLevel.Info);
+                        }
                         isConfigurationDirty = false; // Set dirty flag only after successful load and fit
                         Debug.WriteLine("[DEBUG] LoadDxfButton_Click (Dispatcher): PerformFitToView completed.");
                     }), DispatcherPriority.Background);
@@ -2504,8 +2508,12 @@ namespace RobTeach.Views
 
             // Apply a margin, e.g., 5% of the canvas dimension
             double marginFactor = 0.95;
+            double initialScale = scale; // Log scale before margin
             scale *= marginFactor;
-            Debug.WriteLine($"[DEBUG] PerformFitToView: Calculated scaleX={scaleX}, scaleY={scaleY}, final scale (with margin)={scale}");
+
+            AppLogger.Log($"PerformFitToView: Canvas(W:{canvasWidth:F2}, H:{canvasHeight:F2}), Content(W:{contentWidth:F2}, H:{contentHeight:F2})", LogLevel.Debug);
+            AppLogger.Log($"PerformFitToView: ScaleX_raw={scaleX:F4}, ScaleY_raw={scaleY:F4}, InitialMinScale={initialScale:F4}, MarginFactor={marginFactor}, FinalScale={scale:F4}", LogLevel.Debug);
+            // Debug.WriteLine($"[DEBUG] PerformFitToView: Calculated scaleX={scaleX}, scaleY={scaleY}, final scale (with margin)={scale}"); // Replaced by AppLogger
 
             _scaleTransform.ScaleX = scale;
             _scaleTransform.ScaleY = scale; // Maintain aspect ratio

@@ -1,27 +1,18 @@
 using IxMilia.Dxf;
 using IxMilia.Dxf.Entities;
-// using netDxf.Tables;
-// using netDxf.Units;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Linq;
-using RobTeach.Models; // Added for Trajectory type
-// using System.Windows.Shapes;
+using RobTeach.Models;
+using RobTeach.Utils; // For AppLogger
 
 namespace RobTeach.Services
 {
-    /// <summary>
-    /// Provides services for loading CAD (DXF) files and converting DXF entities
-    /// into WPF shapes and trajectory points using IxMilia.Dxf library.
-    /// </summary>
     public class CadService
     {
-        /// <summary>
-        /// Loads a DXF document from the specified file path with enhanced error handling and version compatibility.
-        /// </summary>
         public DxfFile LoadDxf(string filePath)
         {
             if (string.IsNullOrEmpty(filePath))
@@ -35,7 +26,6 @@ namespace RobTeach.Services
             
             try
             {
-                // IxMilia.Dxf is more forgiving with DXF formats
                 DxfFile dxf = DxfFile.Load(filePath);
                 return dxf;
             }
@@ -45,27 +35,21 @@ namespace RobTeach.Services
             }
         }
         
-        /// <summary>
-        /// Converts entities from a <see cref="DxfFile"/> into a list of WPF <see cref="System.Windows.Shapes.Shape"/> objects for display.
-        /// Supports Lines, Arcs, and Circles.
-        /// </summary>
         public List<System.Windows.Shapes.Shape> GetWpfShapesFromDxf(DxfFile dxfFile)
         {
             var wpfShapes = new List<System.Windows.Shapes.Shape>();
             if (dxfFile == null)
             {
-                System.Diagnostics.Debug.WriteLine("[JULES_DEBUG] CadService.GetWpfShapesFromDxf: dxfFile is null. Returning empty list.");
+                AppLogger.Log("[CadService] GetWpfShapesFromDxf: dxfFile is null. Returning empty list.", LogLevel.Warning);
                 return wpfShapes;
             }
-            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf: Processing {dxfFile.Entities.Count()} entities from DXF document.");
+            AppLogger.Log($"[CadService] GetWpfShapesFromDxf: Processing {dxfFile.Entities.Count()} entities from DXF document.", LogLevel.Debug);
             int entityCounter = 0;
 
-            // Process all entities
             foreach (var entity in dxfFile.Entities)
             {
-                System.Windows.Shapes.Shape? wpfShape = null; // Use nullable Shape
-                // string entityIdentifier = $"Handle: {entity.Handle.ToString("X")}, Type: {entity.GetType().Name}"; // Removed due to compile error
-                System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf: Processing entity at index {entityCounter} (C# Type: {entity.GetType().Name}).");
+                System.Windows.Shapes.Shape? wpfShape = null;
+                AppLogger.Log($"[CadService] GetWpfShapesFromDxf: Processing entity at index {entityCounter} (C# Type: {entity.GetType().Name}, Layer: {entity.Layer}, Handle: {entity.Handle}).", LogLevel.Debug);
 
                 switch (entity)
                 {
@@ -76,15 +60,15 @@ namespace RobTeach.Services
                             X2 = dxfLine.P2.X, Y2 = dxfLine.P2.Y,
                             IsHitTestVisible = true
                         };
-                        System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   Converted DxfLine to WPF Line.");
+                        AppLogger.Log($"[CadService]   Converted DxfLine to WPF Line.", LogLevel.Debug);
                         break;
 
                     case DxfArc dxfArc:
                         wpfShape = CreateArcPath(dxfArc);
                         if (wpfShape != null)
-                            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   Converted DxfArc to WPF Path.");
+                            AppLogger.Log($"[CadService]   Converted DxfArc to WPF Path.", LogLevel.Debug);
                         else
-                            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   FAILED to convert DxfArc to WPF Path.");
+                            AppLogger.Log($"[CadService]   FAILED to convert DxfArc to WPF Path.", LogLevel.Warning);
                         break;
 
                     case DxfCircle dxfCircle:
@@ -99,37 +83,30 @@ namespace RobTeach.Services
                             Fill = Brushes.Transparent,
                             IsHitTestVisible = true
                         };
-                        System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   Converted DxfCircle to WPF Path (EllipseGeometry).");
+                        AppLogger.Log($"[CadService]   Converted DxfCircle to WPF Path (EllipseGeometry).", LogLevel.Debug);
                         break;
-                    // IMPORTANT: Add case for DxfLwPolyline if it's used in your DXFs
                     case DxfLwPolyline lwPoly:
-                        // Placeholder: Implement DxfLwPolyline to WPF Path conversion
-                        wpfShape = ConvertLwPolylineToWpfPath(lwPoly); // You'll need to create this method
+                        wpfShape = ConvertLwPolylineToWpfPath(lwPoly);
                         if(wpfShape != null)
-                            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   Converted DxfLwPolyline to WPF Path.");
+                            AppLogger.Log($"[CadService]   Converted DxfLwPolyline to WPF Path.", LogLevel.Debug);
                         else
-                            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   FAILED to convert DxfLwPolyline to WPF Path.");
+                            AppLogger.Log($"[CadService]   FAILED to convert DxfLwPolyline to WPF Path (returned null).", LogLevel.Warning);
                         break;
                     default:
-                        System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   EntityType '{entity.GetType().Name}' not explicitly supported for WPF shape conversion. Entity skipped.");
+                        AppLogger.Log($"[CadService]   EntityType '{entity.GetType().Name}' not explicitly supported for WPF shape conversion. Entity skipped.", LogLevel.Debug);
                         break;
                 }
-                // Add the created shape (or null if conversion failed or type not supported)
-                // This ensures the returned list has a 1:1 correspondence with dxfFile.Entities
-                wpfShapes.Add(wpfShape);
+                wpfShapes.Add(wpfShape); // Add null if not converted, to maintain list correspondence
                 entityCounter++;
             }
-            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf: Finished processing. Returning list with {wpfShapes.Count} elements (Shape or null).");
+            AppLogger.Log($"[CadService] GetWpfShapesFromDxf: Finished processing. Returning list with {wpfShapes.Count} elements.", LogLevel.Debug);
             return wpfShapes;
         }
 
-        /// <summary>
-        /// Creates a WPF Path for a DXF Arc.
-        /// </summary>
         private System.Windows.Shapes.Path? CreateArcPath(DxfArc dxfArc)
         {
             if (dxfArc == null) {
-                System.Diagnostics.Debug.WriteLine("[JULES_DEBUG] CreateArcPath: Input DxfArc is null.");
+                AppLogger.Log("[CadService] CreateArcPath: Input DxfArc is null.", LogLevel.Warning);
                 return null;
             }
             try
@@ -147,9 +124,13 @@ namespace RobTeach.Services
 
                 double sweepAngleDegrees = dxfArc.EndAngle - dxfArc.StartAngle;
                 if (sweepAngleDegrees < 0) sweepAngleDegrees += 360;
-                
+                // Ensure sweep is not exactly 0 or 360 if start and end are same, which can happen for full circles passed as arcs
+                if (sweepAngleDegrees == 0 && dxfArc.StartAngle != dxfArc.EndAngle) sweepAngleDegrees = 360;
+                if (sweepAngleDegrees == 360 && dxfArc.StartAngle == dxfArc.EndAngle) sweepAngleDegrees = 360;
+
+
                 bool isLargeArc = sweepAngleDegrees > 180.0;
-                SweepDirection sweepDirection = SweepDirection.Counterclockwise;
+                SweepDirection sweepDirection = SweepDirection.Counterclockwise; // DXF arcs are CCW by convention
 
                 ArcSegment arcSegment = new ArcSegment
                 {
@@ -157,14 +138,14 @@ namespace RobTeach.Services
                     Size = new System.Windows.Size(dxfArc.Radius, dxfArc.Radius),
                     IsLargeArc = isLargeArc,
                     SweepDirection = sweepDirection,
-                    RotationAngle = 0,
+                    RotationAngle = 0, // DXF Arcs are circular, no rotation of ellipse axes
                     IsStroked = true
                 };
 
                 PathFigure pathFigure = new PathFigure
                 {
                     StartPoint = pathStartPoint,
-                    IsClosed = false
+                    IsClosed = false // Arcs are not closed paths by definition
                 };
                 pathFigure.Segments.Add(arcSegment);
 
@@ -178,15 +159,164 @@ namespace RobTeach.Services
                     IsHitTestVisible = true
                 };
             }
-            catch
+            catch(Exception ex)
             {
+                AppLogger.Log($"[CadService] CreateArcPath: Error converting DxfArc (Handle: {dxfArc.Handle}): {ex.Message}", ex, LogLevel.Error);
                 return null;
             }
         }
 
-        /// <summary>
-        /// Converts a DXF Line entity into a list of two System.Windows.Point objects.
-        /// </summary>
+    private System.Windows.Shapes.Path? ConvertLwPolylineToWpfPath(DxfLwPolyline lwPolyline)
+    {
+        if (lwPolyline.Vertices.Count == 0)
+        {
+            AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath: LwPolyline (Handle: {lwPolyline.Handle}) has no vertices, returning null.", LogLevel.Debug);
+            return null;
+        }
+
+        AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath: Processing LwPolyline (Handle: {lwPolyline.Handle}) with {lwPolyline.Vertices.Count} vertices. IsClosed: {lwPolyline.IsClosed}, Layer: {lwPolyline.Layer}", LogLevel.Debug);
+
+        PathGeometry pathGeometry = new PathGeometry();
+        PathFigure pathFigure = new PathFigure();
+
+        var firstVertex = lwPolyline.Vertices.First();
+        pathFigure.StartPoint = new Point(firstVertex.X, firstVertex.Y);
+        AppLogger.Log($"[CadService] LwPolyline PathFigure StartPoint: ({firstVertex.X:F3}, {firstVertex.Y:F3})", LogLevel.Debug);
+
+        for (int i = 0; i < lwPolyline.Vertices.Count; i++)
+        {
+            var v1 = lwPolyline.Vertices[i];
+            DxfLwPolylineVertex v2;
+            string segmentTypeForLog;
+
+            bool isLastVertex = (i == lwPolyline.Vertices.Count - 1);
+
+            if (!isLastVertex)
+            {
+                v2 = lwPolyline.Vertices[i + 1];
+                segmentTypeForLog = "Segment";
+            }
+            else if (lwPolyline.IsClosed)
+            {
+                v2 = lwPolyline.Vertices.First();
+                segmentTypeForLog = "Closing Segment";
+            }
+            else // Last vertex of an open polyline
+            {
+                 AppLogger.Log($"[CadService] LwPolyline open, end of vertices at index {i}. No further segments from this vertex.", LogLevel.Debug);
+                 break;
+            }
+
+            Point p1Wpf = new Point(v1.X, v1.Y);
+            Point p2Wpf = new Point(v2.X, v2.Y);
+            AppLogger.Log($"[CadService] LwPolyline {segmentTypeForLog} {i}: V1=({v1.X:F3},{v1.Y:F3} B={v1.Bulge:F4}) to V2=({v2.X:F3},{v2.Y:F3})", LogLevel.Debug);
+
+            // If current point and next point are the same, skip creating a zero-length segment, unless it's a bulge defining a full circle
+            if (p1Wpf == p2Wpf && Math.Abs(v1.Bulge) < 1e-6) { // Bulge for full circle would be 1 or -1 for specific cases, or non-zero for arcs.
+                 AppLogger.Log($"[CadService] LwPolyline SKIPPED zero-length straight segment from ({p1Wpf.X:F3},{p1Wpf.Y:F3}) to ({p2Wpf.X:F3},{p2Wpf.Y:F3}).", LogLevel.Debug);
+                // If this is the last segment of a closed polyline and it's zero length, PathFigure.IsClosed will handle it.
+                // If it's an intermediate zero-length segment, skipping is fine.
+                if (isLastVertex && lwPolyline.IsClosed) { /* Let IsClosed handle this */ }
+                else continue;
+            }
+
+            if (Math.Abs(v1.Bulge) < 1e-6)
+            {
+                pathFigure.Segments.Add(new LineSegment(p2Wpf, true));
+                AppLogger.Log($"[CadService] LwPolyline Added LineSegment to ({p2Wpf.X:F3}, {p2Wpf.Y:F3})", LogLevel.Debug);
+            }
+            else
+            {
+                var arcSegment = CalculateArcSegmentFromBulge(p1Wpf, p2Wpf, v1.Bulge);
+                if (arcSegment != null) {
+                    pathFigure.Segments.Add(arcSegment);
+                    AppLogger.Log($"[CadService] LwPolyline Added ArcSegment: EndPoint=({arcSegment.Point.X:F3},{arcSegment.Point.Y:F3}), Size=({arcSegment.Size.Width:F3},{arcSegment.Size.Height:F3}), IsLargeArc={arcSegment.IsLargeArc}, Sweep={arcSegment.SweepDirection}", LogLevel.Debug);
+                } else {
+                    AppLogger.Log($"[CadService] LwPolyline FAILED to calculate ArcSegment from V1=({v1.X:F3},{v1.Y:F3} B={v1.Bulge:F4}) to V2=({v2.X:F3},{v2.Y:F3}), adding LineSegment instead.", LogLevel.Warning);
+                    pathFigure.Segments.Add(new LineSegment(p2Wpf, true)); // Fallback to line segment
+                }
+            }
+        }
+
+        if (lwPolyline.Vertices.Count == 1) {
+             // A single vertex LwPolyline. PathFigure has StartPoint. To make it "visible" for hit-testing or as a tiny dot.
+             // We can add a zero-length line segment. Or do nothing if single points are not meant to be selectable shapes.
+             // For now, let it be, PathFigure.Segments might be empty. Add if needed.
+             AppLogger.Log($"[CadService] LwPolyline has only one vertex at ({pathFigure.StartPoint.X:F3}, {pathFigure.StartPoint.Y:F3}). PathFigure segments count: {pathFigure.Segments.Count}", LogLevel.Debug);
+        }
+
+        pathFigure.IsClosed = lwPolyline.IsClosed;
+        AppLogger.Log($"[CadService] LwPolyline PathFigure IsClosed set to: {pathFigure.IsClosed}", LogLevel.Debug);
+
+        if (pathFigure.StartPoint == null && !pathFigure.Segments.Any()) {
+             AppLogger.Log($"[CadService] LwPolyline (Handle: {lwPolyline.Handle}) resulted in an empty PathFigure. Returning null.", LogLevel.Warning);
+            return null; // Avoid creating Path with empty Figure/Geometry
+        }
+
+        pathGeometry.Figures.Add(pathFigure);
+
+        AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath for LwPolyline (Handle: {lwPolyline.Handle}) completed.", LogLevel.Debug);
+        return new System.Windows.Shapes.Path
+        {
+            Data = pathGeometry,
+            Fill = Brushes.Transparent,
+            IsHitTestVisible = true
+        };
+    }
+
+    private ArcSegment? CalculateArcSegmentFromBulge(Point p1, Point p2, double bulge)
+    {
+        AppLogger.Log($"[CadService] CalculateArcSegmentFromBulge: P1=({p1.X:F3},{p1.Y:F3}), P2=({p2.X:F3},{p2.Y:F3}), Bulge={bulge:F4}", LogLevel.Debug);
+
+        // theta is the included angle of the arc segment.
+        double theta = 4 * Math.Atan(bulge);
+
+        double dx = p2.X - p1.X;
+        double dy = p2.Y - p1.Y;
+        double chord = Math.Sqrt(dx * dx + dy * dy);
+
+        if (Math.Abs(chord) < 1e-9)
+        {
+            // Points are coincident. An arc segment isn't well-defined.
+            // Depending on bulge, this could be a full circle if bulge is +/-1, but DXF LwPolyline spec implies segment between vertices.
+            AppLogger.Log($"[CadService] CalculateArcSegmentFromBulge: Chord length ({chord:E3}) near zero. Bulge is {bulge:F4}. Returning null for ArcSegment.", LogLevel.Debug);
+            return null; // Or treat as a point / zero-length line if necessary.
+        }
+
+        double radius;
+        // If sin(theta/2) is zero, it means theta is 0 or 2*PI.
+        // theta = 0 implies bulge = 0, which should be handled as a line segment.
+        // theta = 2*PI (or multiples) means a full circle segment if p1 and p2 are the same, which is caught by chord length check.
+        // If p1 and p2 are different, theta cannot be 2*PI for a single segment.
+        double sinHalfTheta = Math.Sin(theta / 2.0);
+        if (Math.Abs(sinHalfTheta) < 1e-9)
+        {
+             // This case (bulge != 0 but sin(theta/2) == 0) implies theta is a multiple of 2*PI.
+             // For a segment between two distinct points, this is geometrically problematic for arc radius.
+             // It suggests an issue with bulge value or an extreme case.
+             AppLogger.Log($"[CadService] CalculateArcSegmentFromBulge: Sin(theta/2) near zero (theta={theta*180/Math.PI:F2}deg). Cannot form proper arc. Chord={chord:F3}.", LogLevel.Warning);
+             return null; // Cannot form a valid arc segment here.
+        } else {
+             radius = Math.Abs(chord / (2 * sinHalfTheta));
+        }
+
+        SweepDirection sweepDirection = (bulge > 0) ? SweepDirection.Counterclockwise : SweepDirection.Clockwise;
+        bool isLargeArc = Math.Abs(theta) > Math.PI;
+        Size arcSize = new Size(radius, radius);
+
+        AppLogger.Log($"[CadService] CalculateArcSegmentFromBulge: Result: Theta={theta * 180.0/Math.PI:F3}deg, Chord={chord:F3}, Radius={radius:F3}, IsLargeArc={isLargeArc}, Sweep={sweepDirection}", LogLevel.Debug);
+
+        if (double.IsInfinity(radius) || double.IsNaN(radius) || radius > 1e9) // Check for extreme radius
+        {
+            AppLogger.Log($"[CadService] CalculateArcSegmentFromBulge: Radius is extreme ({radius:E3}). May fall back to line segment.", LogLevel.Warning);
+            // It might be better to return null and let caller draw a line segment.
+            return null;
+        }
+
+        return new ArcSegment(p2, arcSize, 0, isLargeArc, sweepDirection, true);
+    }
+
+        // Method stubs for trajectory point conversion - to be reviewed/completed if needed by other parts
         public List<System.Windows.Point> ConvertLineToPoints(DxfLine line)
         {
             var points = new List<System.Windows.Point>();
@@ -196,22 +326,16 @@ namespace RobTeach.Services
             return points;
         }
 
-        /// <summary>
-        /// Converts a DXF Arc entity into a list of discretized System.Windows.Point objects.
-        /// </summary>
         public List<System.Windows.Point> ConvertArcToPoints(DxfArc arc, double resolutionDegrees)
         {
             var points = new List<System.Windows.Point>();
             if (arc == null || resolutionDegrees <= 0) return points;
-
+            // ... (implementation as before) ...
             double startAngle = arc.StartAngle;
             double endAngle = arc.EndAngle;
             double radius = arc.Radius;
             System.Windows.Point center = new System.Windows.Point(arc.Center.X, arc.Center.Y);
-
-            // Normalize angles
             if (endAngle < startAngle) endAngle += 360;
-
             double currentAngle = startAngle;
             while (currentAngle <= endAngle)
             {
@@ -219,30 +343,20 @@ namespace RobTeach.Services
                 double x = center.X + radius * Math.Cos(radAngle);
                 double y = center.Y + radius * Math.Sin(radAngle);
                 points.Add(new System.Windows.Point(x, y));
-                
                 currentAngle += resolutionDegrees;
             }
-
-            // Ensure end point is included
             if (Math.Abs(currentAngle - resolutionDegrees - endAngle) > 0.001)
             {
                 double endRadAngle = endAngle * Math.PI / 180.0;
-                double endX = center.X + radius * Math.Cos(endRadAngle);
-                double endY = center.Y + radius * Math.Sin(endRadAngle);
-                points.Add(new System.Windows.Point(endX, endY));
+                points.Add(new System.Windows.Point(center.X + radius * Math.Cos(endRadAngle), center.Y + radius * Math.Sin(endRadAngle)));
             }
-
             return points;
         }
 
-        /// <summary>
-        /// Converts a DXF Circle entity to a list of points representing its perimeter.
-        /// </summary>
         public List<System.Windows.Point> ConvertCircleToPoints(DxfCircle circle, double resolutionDegrees)
         {
             List<System.Windows.Point> points = new List<System.Windows.Point>();
             if (circle == null || resolutionDegrees <= 0) return points;
-
             for (double angle = 0; angle < 360.0; angle += resolutionDegrees)
             {
                 double radAngle = angle * Math.PI / 180.0;
@@ -250,307 +364,43 @@ namespace RobTeach.Services
                 double y = circle.Center.Y + circle.Radius * Math.Sin(radAngle);
                 points.Add(new System.Windows.Point(x, y));
             }
-
+             if (points.Count > 0) points.Add(points[0]); // Close the circle
             return points;
         }
-
-        /* // LightWeightPolyline processing removed as per subtask
-        /// <summary>
-        /// Converts a DXF LwPolyline entity into a list of discretized System.Windows.Point objects.
-        /// </summary>
-        public List<System.Windows.Point> ConvertLwPolylineToPoints(LightWeightPolyline polyline, double arcResolutionDegrees)
+        public List<System.Windows.Point> ConvertLineTrajectoryToPoints(Trajectory trajectory)
         {
             var points = new List<System.Windows.Point>();
-            if (polyline == null || polyline.Vertices.Count == 0) return points;
-            for (int i = 0; i < polyline.Vertices.Count; i++) {
-                var currentVertexInfo = polyline.Vertices[i];
-                System.Windows.Point currentDxfPoint = new System.Windows.Point(currentVertexInfo.Position.X, currentVertexInfo.Position.Y);
-                points.Add(currentDxfPoint);
-                if (Math.Abs(currentVertexInfo.Bulge) > 0.0001) {
-                    if (!polyline.IsClosed && i == polyline.Vertices.Count - 1) continue;
-                    // TODO: Implement LwPolyline bulge to Arc conversion for trajectory points.
-                }
-            }
-            if (polyline.IsClosed && points.Count > 1 && System.Windows.Point.Subtract(points.First(), points.Last()).Length > 0.001) { // Requires System.Linq for .First() and .Last()
-                 points.Add(points[0]);
-            } else if (polyline.Vertices.Count == 1 && !points.Any()){ // Requires System.Linq for .Any()
-                 points.Add(new System.Windows.Point(polyline.Vertices[0].Position.X, polyline.Vertices[0].Position.Y));
-            }
+            if (trajectory == null || trajectory.PrimitiveType != "Line") return points;
+            DxfPoint start = trajectory.LineStartPoint;
+            DxfPoint end = trajectory.LineEndPoint;
+            if (trajectory.IsReversed) { points.Add(new System.Windows.Point(end.X, end.Y)); points.Add(new System.Windows.Point(start.X, start.Y)); }
+            else { points.Add(new System.Windows.Point(start.X, start.Y)); points.Add(new System.Windows.Point(end.X, end.Y)); }
             return points;
         }
-        */
-    // } // This closing brace was prematurely ending the CadService class. Moved to the end.
-
-    // New methods to generate points from Trajectory geometric parameters
-
-    /// <summary>
-    /// Converts a Line Trajectory object into a list of two System.Windows.Point objects.
-    /// Respects the IsReversed flag on the Trajectory.
-    /// </summary>
-    public List<System.Windows.Point> ConvertLineTrajectoryToPoints(Trajectory trajectory)
-    {
-        var points = new List<System.Windows.Point>();
-        if (trajectory == null || trajectory.PrimitiveType != "Line") return points;
-
-        DxfPoint start = trajectory.LineStartPoint;
-        DxfPoint end = trajectory.LineEndPoint;
-
-        if (trajectory.IsReversed)
+        public List<System.Windows.Point> ConvertArcTrajectoryToPoints(Trajectory trajectory, double resolutionDegrees)
         {
-            points.Add(new System.Windows.Point(end.X, end.Y));
-            points.Add(new System.Windows.Point(start.X, start.Y));
-        }
-        else
-        {
-            points.Add(new System.Windows.Point(start.X, start.Y));
-            points.Add(new System.Windows.Point(end.X, end.Y));
-        }
-        return points;
-    }
-
-    /// <summary>
-    /// Converts an Arc Trajectory object into a list of discretized System.Windows.Point objects.
-    /// Respects the IsReversed flag on the Trajectory.
-    /// </summary>
-    public List<System.Windows.Point> ConvertArcTrajectoryToPoints(Trajectory trajectory, double resolutionDegrees)
-    {
-        var points = new List<System.Windows.Point>();
-        if (trajectory == null || trajectory.PrimitiveType != "Arc" || resolutionDegrees <= 0) return points;
-
-        // Use the 3-point arc definition
-        DxfPoint p1 = trajectory.ArcPoint1.Coordinates;
-        DxfPoint p2 = trajectory.ArcPoint2.Coordinates; // Midpoint
-        DxfPoint p3 = trajectory.ArcPoint3.Coordinates;
-
-        // Calculate center, radius, start angle, end angle from 3 points
-        // This is a non-trivial calculation. For simplicity, we'll assume these were pre-calculated
-        // and stored in the DxfArc object if available, or we need a helper function.
-        // For now, let's assume OriginalDxfEntity is a DxfArc and use its properties.
-        if (trajectory.OriginalDxfEntity is DxfArc dxfArc)
-        {
-            double startAngle = dxfArc.StartAngle;
-            double endAngle = dxfArc.EndAngle;
-            double radius = dxfArc.Radius;
-            System.Windows.Point center = new System.Windows.Point(dxfArc.Center.X, dxfArc.Center.Y);
-
-            if (trajectory.IsReversed)
-            {
-                double temp = startAngle;
-                startAngle = endAngle;
-                endAngle = temp;
-            }
-
-            double currentSweepAngle = endAngle - startAngle;
-            if (currentSweepAngle < 0)
-            {
-                currentSweepAngle += 360.0;
-            }
-            double effectiveEndAngle = startAngle + currentSweepAngle;
-
-            double currentAngle = startAngle;
-            while (currentAngle <= effectiveEndAngle + (resolutionDegrees / 2.0))
-            {
-                double angleToProcess = Math.Min(currentAngle, effectiveEndAngle);
-                double radAngle = angleToProcess * Math.PI / 180.0;
-                double x = center.X + radius * Math.Cos(radAngle);
-                double y = center.Y + radius * Math.Sin(radAngle);
-                points.Add(new System.Windows.Point(x, y));
-
-                if (angleToProcess >= effectiveEndAngle - 0.00001) break;
-
-                currentAngle += resolutionDegrees;
-                if (currentAngle > effectiveEndAngle && angleToProcess < effectiveEndAngle - 0.00001)
-                {
-                    currentAngle = effectiveEndAngle;
+            var points = new List<System.Windows.Point>();
+            // ... (implementation as before, needs robust 3-point to arc param logic if OriginalDxfEntity is not DxfArc) ...
+            if (trajectory == null || trajectory.PrimitiveType != "Arc" || resolutionDegrees <= 0) return points;
+            if (trajectory.OriginalDxfEntity is DxfArc dxfArc) { /* ... as before ... */
+                double startAngle = dxfArc.StartAngle;
+                double endAngle = dxfArc.EndAngle;
+                if (trajectory.IsReversed) { double temp = startAngle; startAngle = endAngle; endAngle = temp; }
+                if (endAngle < startAngle) endAngle += 360.0;
+                for (double currentAngle = startAngle; currentAngle <= endAngle; currentAngle += resolutionDegrees) {
+                    double rad = currentAngle * Math.PI / 180.0;
+                    points.Add(new Point(dxfArc.Center.X + dxfArc.Radius * Math.Cos(rad), dxfArc.Center.Y + dxfArc.Radius * Math.Sin(rad)));
                 }
-            }
+                double finalRad = endAngle * Math.PI / 180.0;
+                points.Add(new Point(dxfArc.Center.X + dxfArc.Radius * Math.Cos(finalRad), dxfArc.Center.Y + dxfArc.Radius * Math.Sin(finalRad)));
+
+            } else { AppLogger.Log($"[CadService] ConvertArcTrajectoryToPoints: Trajectory '{trajectory.ToString()}' OriginalDxfEntity is not a DxfArc or is null.", LogLevel.Warning); }
+            return points;
         }
-        else
+        public List<System.Windows.Point> ConvertCircleTrajectoryToPoints(Trajectory trajectory, double resolutionDegrees)
         {
-            // Fallback or error handling if OriginalDxfEntity is not a DxfArc or is null
-            // This part needs a robust way to calculate arc parameters from p1, p2, p3
-            // For now, we'll return an empty list if we can't get parameters from DxfArc
-            Console.WriteLine("Warning: Could not generate points for arc trajectory. OriginalDxfEntity is not a DxfArc or is null.");
+            AppLogger.Log("[CadService] ConvertCircleTrajectoryToPoints called - Note: This method is obsolete for point generation; MainWindow.PopulateTrajectoryPoints should be used.", LogLevel.Debug);
+            return new List<System.Windows.Point>(); // Obsolete
         }
-        return points;
     }
-
-    /// <summary>
-    /// Converts a Circle Trajectory object to a list of points representing its perimeter.
-    /// IsReversed is currently not implemented for circle point generation.
-    /// </summary>
-    public List<System.Windows.Point> ConvertCircleTrajectoryToPoints(Trajectory trajectory, double resolutionDegrees)
-    {
-        // This method is now superseded by logic in MainWindow.PopulateTrajectoryPoints for circles,
-        // which uses the new 3-point circle definition.
-        // The Trajectory object no longer has CircleCenter or CircleRadius directly.
-        // Keeping the method signature for now but it will not compile/work as is.
-        // It should be removed or refactored if CadService needs to generate points from a 3-point defined circle trajectory.
-        System.Diagnostics.Debug.WriteLine("[WARNING] CadService.ConvertCircleTrajectoryToPoints is called but is based on obsolete Trajectory properties.");
-        List<System.Windows.Point> points = new List<System.Windows.Point>();
-        if (trajectory == null || trajectory.PrimitiveType != "Circle" || resolutionDegrees <= 0) return points;
-
-        // The following code will not compile as trajectory.CircleCenter and trajectory.CircleRadius are removed.
-        // // Note: trajectory.CircleNormal is available if needed for 3D calculations.
-        // // IsReversed is not currently affecting circle point generation.
-        // for (double angle = 0; angle < 360.0; angle += resolutionDegrees)
-        // {
-        //     double radAngle = angle * Math.PI / 180.0;
-        //     double x = trajectory.CircleCenter.X + trajectory.CircleRadius * Math.Cos(radAngle);
-        //     double y = trajectory.CircleCenter.Y + trajectory.CircleRadius * Math.Sin(radAngle);
-        //     points.Add(new System.Windows.Point(x, y));
-        // }
-        // // Ensure the circle is closed by adding the start point if it's not already the last point due to resolution.
-        // if (points.Count > 0)
-        // {
-        //      if (Math.Abs(points.Last().X - (trajectory.CircleCenter.X + trajectory.CircleRadius)) > 0.001 ||
-        //          Math.Abs(points.Last().Y - trajectory.CircleCenter.Y) > 0.001)
-        //          {
-        //               points.Add(new System.Windows.Point(trajectory.CircleCenter.X + trajectory.CircleRadius, trajectory.CircleCenter.Y));
-        //          }
-        // }
-        return points; // Returns empty list as the functional code is commented out.
-    }
-
-
-    private System.Windows.Shapes.Path? ConvertLwPolylineToWpfPath(DxfLwPolyline lwPolyline)
-    {
-        if (lwPolyline.Vertices.Count == 0)
-            return null;
-
-        PathGeometry pathGeometry = new PathGeometry();
-        PathFigure pathFigure = new PathFigure();
-
-        var firstVertex = lwPolyline.Vertices.First();
-        pathFigure.StartPoint = new Point(firstVertex.X, firstVertex.Y);
-
-        for (int i = 0; i < lwPolyline.Vertices.Count; i++)
-        {
-            var v1 = lwPolyline.Vertices[i];
-            DxfLwPolylineVertex v2;
-
-            if (i < lwPolyline.Vertices.Count - 1)
-            {
-                v2 = lwPolyline.Vertices[i + 1];
-            }
-            else if (lwPolyline.IsClosed)
-            {
-                v2 = lwPolyline.Vertices.First(); // Close back to the start
-            }
-            else
-            {
-                // Open polyline, last vertex already added as part of a previous segment's end or as start point if only one vertex
-                if (lwPolyline.Vertices.Count == 1 && i == 0) {
-                     // Special case: Polyline with a single vertex. PathFigure already has StartPoint.
-                     // To make it visible, we can add a tiny line segment to itself, or just let it be a point.
-                     // For simplicity, if it's just one vertex, it's effectively a point. PathFigure alone might not render.
-                     // Adding a line to itself to make it a "visible" zero-length path for consistency.
-                     pathFigure.Segments.Add(new LineSegment(pathFigure.StartPoint, true));
-                }
-                break;
-            }
-
-            Point p2Wpf = new Point(v2.X, v2.Y);
-
-            if (Math.Abs(v1.Bulge) < 1e-6) // Consider bulge 0 as a straight line
-            {
-                // Only add segment if it's not the very first vertex (which is StartPoint)
-                // Or if it's a polyline with one vertex, handled above.
-                if (i > 0 || lwPolyline.Vertices.Count > 1 || (i==0 && lwPolyline.IsClosed)) { // ensure p2Wpf is an actual next point
-                     if ( (pathFigure.Segments.Any() && ((pathFigure.Segments.Last() as LineSegment)?.Point != p2Wpf && (pathFigure.Segments.Last() as ArcSegment)?.Point != p2Wpf)) || !pathFigure.Segments.Any())
-                     {
-                        if (pathFigure.StartPoint != p2Wpf || lwPolyline.IsClosed || i < lwPolyline.Vertices.Count -1 ) // Avoid adding segment from last point to itself unless closed
-                            pathFigure.Segments.Add(new LineSegment(p2Wpf, true));
-                     }
-                } else if (lwPolyline.Vertices.Count == 1 && i == 0) {
-                    // Covered by initial single vertex case - tiny line segment added if desired
-                }
-
-
-            }
-            else // Bulge is non-zero, create an ArcSegment
-            {
-                var arcSegment = CalculateArcSegmentFromBulge(
-                    new Point(v1.X, v1.Y),
-                    p2Wpf,
-                    v1.Bulge);
-                pathFigure.Segments.Add(arcSegment);
-            }
-        }
-
-        pathFigure.IsClosed = lwPolyline.IsClosed;
-        pathGeometry.Figures.Add(pathFigure);
-
-        return new System.Windows.Shapes.Path
-        {
-            Data = pathGeometry,
-            Fill = Brushes.Transparent, // LwPolylines are typically not filled unless specified
-            IsHitTestVisible = true
-        };
-    }
-
-    /// <summary>
-    /// Calculates WPF ArcSegment parameters from two DxfLwPolylineVertex points and a bulge value.
-    /// </summary>
-    private ArcSegment CalculateArcSegmentFromBulge(Point p1, Point p2, double bulge)
-    {
-        // Formulas for converting bulge to arc parameters (center, radius, angles)
-        // bulge = tan(theta / 4), where theta is the included angle of the arc segment.
-        double theta = 4 * Math.Atan(bulge);
-
-        // Distance between p1 and p2 (chord length c)
-        double c = Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
-
-        if (Math.Abs(c) < 1e-9) // Points are coincident, treat as zero-length line segment
-        {
-            return new ArcSegment(p2, new Size(0,0), 0, false, SweepDirection.Counterclockwise, true);
-        }
-
-        // Radius of the arc
-        // R = c / (2 * sin(theta / 2))
-        // Handle theta = 0 case (straight line, though already filtered by bulge check)
-        // Handle theta = 2*PI (full circle, bulge would be infinite or very large, not typical for segment)
-        double radius;
-        if (Math.Abs(Math.Sin(theta / 2.0)) < 1e-9) // Angle is too small, effectively a line
-        {
-             radius = double.MaxValue; // Effectively a line
-        } else {
-             radius = c / (2 * Math.Sin(theta / 2.0));
-        }
-
-        radius = Math.Abs(radius); // Radius must be positive
-
-        // Determine sweep direction and isLargeArc flag
-        // SweepDirection is Counterclockwise if bulge > 0, Clockwise if bulge < 0.
-        SweepDirection sweepDirection = (bulge > 0) ? SweepDirection.Counterclockwise : SweepDirection.Clockwise;
-
-        // IsLargeArc is true if |theta| > PI (180 degrees)
-        bool isLargeArc = Math.Abs(theta) > Math.PI;
-
-        // WPF ArcSegment uses Size(radius, radius) for circular arcs
-        Size arcSize = new Size(radius, radius);
-
-        // If radius becomes excessively large (almost straight line), WPF might have issues.
-        // It might be better to return a LineSegment in such extreme cases, but the bulge check should catch most.
-        if (double.IsInfinity(radius) || double.IsNaN(radius) || radius > 1e12) // Arbitrary large number
-        {
-            // This case should ideally be caught by the bulge check (bulge near zero -> LineSegment)
-            // If we reach here, it's an extreme arc. Fallback to a line-like arc.
-            // Forcing a very small curvature or treating as line if radius is too large.
-            // However, WPF's ArcSegment is robust. Let's trust it with large radii if bulge wasn't zero.
-            // The primary check is for bulge == 0.
-        }
-
-
-        return new ArcSegment(
-            p2,             // End point of the arc segment
-            arcSize,        // Size (radiusX, radiusY)
-            0,              // RotationAngle (usually 0 for 2D DXF LwPolyline arcs)
-            isLargeArc,
-            sweepDirection,
-            true            // IsStroked
-        );
-    }
-} // This closes the CadService class
-
-} // This closes the namespace RobTeach.Services
+}
