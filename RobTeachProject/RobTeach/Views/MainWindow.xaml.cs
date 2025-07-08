@@ -2484,17 +2484,6 @@ namespace RobTeach.Views
         private void FitToViewButton_Click(object sender, RoutedEventArgs e) { Debug.WriteLine("[DEBUG] FitToViewButton_Click called."); PerformFitToView(); }
         private void PerformFitToView()
         {
-            // DIAGNOSTIC: Temporarily simplify PerformFitToView
-            AppLogger.Log($"[DIAGNOSTIC] PerformFitToView called. Applying fixed scale (1, -1) and zero translation.", LogLevel.Debug);
-            _scaleTransform.ScaleX = 1;
-            _scaleTransform.ScaleY = -1; // Flip Y-axis
-            _translateTransform.X = 0;
-            _translateTransform.Y = 0;
-            StatusTextBlock.Text = "Diagnostic view: Scale (1,-1), Translate (0,0)";
-            return; // Skip original logic for now
-
-            // Original PerformFitToView logic commented out below for diagnostics
-            /*
             Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
             AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
             Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
@@ -2516,14 +2505,15 @@ namespace RobTeach.Views
             double contentWidth = _dxfBoundingBox.Width;
             double contentHeight = _dxfBoundingBox.Height;
 
-            if (contentWidth == 0 || contentHeight == 0)
+            if (contentWidth <= 0 || contentHeight <= 0) // Check for non-positive width/height
             {
-                Debug.WriteLine("[DEBUG] PerformFitToView: ContentWidth or ContentHeight is zero. Exiting.");
+                Debug.WriteLine($"[DEBUG] PerformFitToView: ContentWidth ({contentWidth}) or ContentHeight ({contentHeight}) is zero or negative. Exiting.");
                 // Reset to default rather than leaving transforms in an unknown state
                 _scaleTransform.ScaleX = 1;
                 _scaleTransform.ScaleY = 1;
                 _translateTransform.X = 0;
                 _translateTransform.Y = 0;
+                StatusTextBlock.Text = "Error: Invalid content dimensions for fit.";
                 return;
             }
 
@@ -2558,7 +2548,6 @@ namespace RobTeach.Views
 
             StatusTextBlock.Text = "View fitted to content.";
             Debug.WriteLine("[DEBUG] PerformFitToView: Completed.");
-            */
         }
         private void CadCanvas_MouseWheel(object sender, MouseWheelEventArgs e) { /* ... (No change) ... */ }
         private void CadCanvas_MouseDown(object sender, MouseButtonEventArgs e)
