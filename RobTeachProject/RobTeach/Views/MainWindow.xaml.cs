@@ -2414,22 +2414,22 @@ namespace RobTeach.Views
                     }
 
                     // Temporary specific filter for large axis lines if they are not caught by layer filter
-                    if (entity is DxfLine axisCand)
-                    {
-                        bool isLikelyXAxis = Math.Abs(axisCand.P1.Y) < 0.01 && Math.Abs(axisCand.P2.Y) < 0.01 &&
-                                            ((Math.Abs(axisCand.P1.X + 1000) < 0.01 && Math.Abs(axisCand.P2.X - 1000) < 0.01) ||
-                                             (Math.Abs(axisCand.P1.X - 1000) < 0.01 && Math.Abs(axisCand.P2.X + 1000) < 0.01));
-                        bool isLikelyYAxis = Math.Abs(axisCand.P1.X) < 0.01 && Math.Abs(axisCand.P2.X) < 0.01 &&
-                                            ((Math.Abs(axisCand.P1.Y + 1000) < 0.01 && Math.Abs(axisCand.P2.Y - 1000) < 0.01) ||
-                                             (Math.Abs(axisCand.P1.Y - 1000) < 0.01 && Math.Abs(axisCand.P2.Y + 1000) < 0.01));
-
-                        if (isLikelyXAxis || isLikelyYAxis)
-                        {
-                            AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:DxfLine, Coords:[P1({axisCand.P1.X:F0},{axisCand.P1.Y:F0}) P2({axisCand.P2.X:F0},{axisCand.P2.Y:F0})] - SKIPPED as likely oversized axis (specific filter).", LogLevel.Debug);
-                            entityIndex++;
-                            continue;
-                        }
-                    }
+                    //if (entity is DxfLine axisCand)
+                    //{
+                    //    bool isLikelyXAxis = Math.Abs(axisCand.P1.Y) < 0.01 && Math.Abs(axisCand.P2.Y) < 0.01 &&
+                    //                        ((Math.Abs(axisCand.P1.X + 1000) < 0.01 && Math.Abs(axisCand.P2.X - 1000) < 0.01) ||
+                    //                         (Math.Abs(axisCand.P1.X - 1000) < 0.01 && Math.Abs(axisCand.P2.X + 1000) < 0.01));
+                    //    bool isLikelyYAxis = Math.Abs(axisCand.P1.X) < 0.01 && Math.Abs(axisCand.P2.X) < 0.01 &&
+                    //                        ((Math.Abs(axisCand.P1.Y + 1000) < 0.01 && Math.Abs(axisCand.P2.Y - 1000) < 0.01) ||
+                    //                         (Math.Abs(axisCand.P1.Y - 1000) < 0.01 && Math.Abs(axisCand.P2.Y + 1000) < 0.01));
+                    //
+                    //    if (isLikelyXAxis || isLikelyYAxis)
+                    //    {
+                    //        AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:DxfLine, Coords:[P1({axisCand.P1.X:F0},{axisCand.P1.Y:F0}) P2({axisCand.P2.X:F0},{axisCand.P2.Y:F0})] - SKIPPED as likely oversized axis (specific filter).", LogLevel.Debug);
+                    //        entityIndex++;
+                    //        continue;
+                    //    }
+                    //}
 
                     try
                     {
