@@ -49,8 +49,8 @@ namespace RobTeach.Services
             foreach (DxfEntity entity in dxfFile.Entities) // Ensure entity is typed as DxfEntity for direct Handle access
             {
                 System.Windows.Shapes.Shape? wpfShape = null;
-                uint entityHandle = entity.Handle; // Access handle safely
-                AppLogger.Log($"[CadService] GetWpfShapesFromDxf: Processing entity at index {entityCounter} (C# Type: {entity.GetType().Name}, Layer: {entity.Layer}, Handle: {entityHandle}).", LogLevel.Debug);
+                // uint entityHandle = entity.Handle; // Access handle safely // Removed due to Handle not being available directly
+                AppLogger.Log($"[CadService] GetWpfShapesFromDxf: Processing entity at index {entityCounter} (C# Type: {entity.GetType().Name}, Layer: {entity.Layer}).", LogLevel.Debug);
 
                 switch (entity)
                 {
@@ -162,22 +162,22 @@ namespace RobTeach.Services
             }
             catch(Exception ex)
             {
-                uint h = dxfArc?.Handle ?? 0; // Safely access handle
-                AppLogger.Log($"[CadService] CreateArcPath: Error converting DxfArc (Handle: {h}): {ex.Message}", ex, LogLevel.Error);
+                // uint h = dxfArc?.Handle ?? 0; // Safely access handle // Removed due to Handle not being available directly
+                AppLogger.Log($"[CadService] CreateArcPath: Error converting DxfArc (Type: {dxfArc?.GetType().Name}, Layer: {dxfArc?.Layer}): {ex.Message}", ex, LogLevel.Error);
                 return null;
             }
         }
 
     private System.Windows.Shapes.Path? ConvertLwPolylineToWpfPath(DxfLwPolyline lwPolyline)
     {
-        uint polylineHandle = lwPolyline.Handle; // Get handle once
+        // uint polylineHandle = lwPolyline.Handle; // Get handle once // Removed due to Handle not being available directly
         if (lwPolyline.Vertices.Count == 0)
         {
-            AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath: LwPolyline (Handle: {polylineHandle}) has no vertices, returning null.", LogLevel.Debug);
+            AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath: LwPolyline (Layer: {lwPolyline.Layer}) has no vertices, returning null.", LogLevel.Debug);
             return null;
         }
 
-        AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath: Processing LwPolyline (Handle: {polylineHandle}) with {lwPolyline.Vertices.Count} vertices. IsClosed: {lwPolyline.IsClosed}, Layer: {lwPolyline.Layer}", LogLevel.Debug);
+        AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath: Processing LwPolyline (Layer: {lwPolyline.Layer}) with {lwPolyline.Vertices.Count} vertices. IsClosed: {lwPolyline.IsClosed}", LogLevel.Debug);
 
         PathGeometry pathGeometry = new PathGeometry();
         PathFigure pathFigure = new PathFigure();
@@ -252,13 +252,13 @@ namespace RobTeach.Services
         AppLogger.Log($"[CadService] LwPolyline PathFigure IsClosed set to: {pathFigure.IsClosed}", LogLevel.Debug);
 
         if (pathFigure.StartPoint == null && !pathFigure.Segments.Any()) {
-             AppLogger.Log($"[CadService] LwPolyline (Handle: {polylineHandle}) resulted in an empty PathFigure. Returning null.", LogLevel.Warning);
+             AppLogger.Log($"[CadService] LwPolyline (Layer: {lwPolyline.Layer}) resulted in an empty PathFigure. Returning null.", LogLevel.Warning);
             return null; // Avoid creating Path with empty Figure/Geometry
         }
 
         pathGeometry.Figures.Add(pathFigure);
 
-        AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath for LwPolyline (Handle: {polylineHandle}) completed.", LogLevel.Debug);
+        AppLogger.Log($"[CadService] ConvertLwPolylineToWpfPath for LwPolyline (Layer: {lwPolyline.Layer}) completed.", LogLevel.Debug);
         return new System.Windows.Shapes.Path
         {
             Data = pathGeometry,
