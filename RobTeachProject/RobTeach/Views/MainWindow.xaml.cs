@@ -32,6 +32,19 @@ namespace RobTeach.Views
     /// </summary>
     public partial class MainWindow : MetroWindow // Changed from Window to MetroWindow
     {
+        private static readonly List<string> _layersToIgnoreForBoundingBox = new List<string>
+        {
+            "DEFPOINTS", // Standard non-plotting layer
+            "AXES",
+            "CONSTRUCTION",
+            "0_REF",
+            "REFERENCE",
+            "DIMENSIONS",
+            "TEXT_NOTES",
+            "VIEWPORT"
+            // Add more common non-geometry layer names if known
+        };
+
         // Services used by the MainWindow
         private readonly CadService _cadService = new CadService();
         private readonly ConfigurationService _configService = new ConfigurationService();
@@ -2383,6 +2396,14 @@ namespace RobTeach.Views
                     if (entity == null)
                     {
                         AppLogger.Log($"GetDxfBoundingBox: Entity at index {entityIndex} is null, skipping.", LogLevel.Debug);
+                        entityIndex++;
+                        continue;
+                    }
+
+                    // Layer filtering for bounding box
+                    if (_layersToIgnoreForBoundingBox.Contains(entity.Layer, StringComparer.OrdinalIgnoreCase))
+                    {
+                        AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:{entity.GetType().Name}, Layer:'{entity.Layer}' - SKIPPED for bounding box.", LogLevel.Debug);
                         entityIndex++;
                         continue;
                     }
