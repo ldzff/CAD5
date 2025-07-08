@@ -104,8 +104,11 @@ namespace RobTeach.Services
                     // IMPORTANT: Add case for DxfLwPolyline if it's used in your DXFs
                     case DxfLwPolyline lwPoly:
                         // Placeholder: Implement DxfLwPolyline to WPF Path conversion
-                        // wpfShape = ConvertLwPolylineToWpfPath(lwPoly); // You'll need to create this method
-                        System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   DxfLwPolyline conversion not yet implemented. Entity skipped.");
+                        wpfShape = ConvertLwPolylineToWpfPath(lwPoly); // You'll need to create this method
+                        if(wpfShape != null)
+                            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   Converted DxfLwPolyline to WPF Path.");
+                        else
+                            System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   FAILED to convert DxfLwPolyline to WPF Path.");
                         break;
                     default:
                         System.Diagnostics.Debug.WriteLine($"[JULES_DEBUG] CadService.GetWpfShapesFromDxf:   EntityType '{entity.GetType().Name}' not explicitly supported for WPF shape conversion. Entity skipped.");
@@ -407,6 +410,146 @@ namespace RobTeach.Services
         //          }
         // }
         return points; // Returns empty list as the functional code is commented out.
+    }
+
+
+    private System.Windows.Shapes.Path? ConvertLwPolylineToWpfPath(DxfLwPolyline lwPolyline)
+    {
+        if (lwPolyline.Vertices.Count == 0)
+            return null;
+
+        PathGeometry pathGeometry = new PathGeometry();
+        PathFigure pathFigure = new PathFigure();
+
+        var firstVertex = lwPolyline.Vertices.First();
+        pathFigure.StartPoint = new Point(firstVertex.X, firstVertex.Y);
+
+        for (int i = 0; i < lwPolyline.Vertices.Count; i++)
+        {
+            var v1 = lwPolyline.Vertices[i];
+            DxfLwPolylineVertex v2;
+
+            if (i < lwPolyline.Vertices.Count - 1)
+            {
+                v2 = lwPolyline.Vertices[i + 1];
+            }
+            else if (lwPolyline.IsClosed)
+            {
+                v2 = lwPolyline.Vertices.First(); // Close back to the start
+            }
+            else
+            {
+                // Open polyline, last vertex already added as part of a previous segment's end or as start point if only one vertex
+                if (lwPolyline.Vertices.Count == 1 && i == 0) {
+                     // Special case: Polyline with a single vertex. PathFigure already has StartPoint.
+                     // To make it visible, we can add a tiny line segment to itself, or just let it be a point.
+                     // For simplicity, if it's just one vertex, it's effectively a point. PathFigure alone might not render.
+                     // Adding a line to itself to make it a "visible" zero-length path for consistency.
+                     pathFigure.Segments.Add(new LineSegment(pathFigure.StartPoint, true));
+                }
+                break;
+            }
+
+            Point p2Wpf = new Point(v2.X, v2.Y);
+
+            if (Math.Abs(v1.Bulge) < 1e-6) // Consider bulge 0 as a straight line
+            {
+                // Only add segment if it's not the very first vertex (which is StartPoint)
+                // Or if it's a polyline with one vertex, handled above.
+                if (i > 0 || lwPolyline.Vertices.Count > 1 || (i==0 && lwPolyline.IsClosed)) { // ensure p2Wpf is an actual next point
+                     if ( (pathFigure.Segments.Any() && ((pathFigure.Segments.Last() as LineSegment)?.Point != p2Wpf && (pathFigure.Segments.Last() as ArcSegment)?.Point != p2Wpf)) || !pathFigure.Segments.Any())
+                     {
+                        if (pathFigure.StartPoint != p2Wpf || lwPolyline.IsClosed || i < lwPolyline.Vertices.Count -1 ) // Avoid adding segment from last point to itself unless closed
+                            pathFigure.Segments.Add(new LineSegment(p2Wpf, true));
+                     }
+                } else if (lwPolyline.Vertices.Count == 1 && i == 0) {
+                    // Covered by initial single vertex case - tiny line segment added if desired
+                }
+
+
+            }
+            else // Bulge is non-zero, create an ArcSegment
+            {
+                var arcSegment = CalculateArcSegmentFromBulge(
+                    new Point(v1.X, v1.Y),
+                    p2Wpf,
+                    v1.Bulge);
+                pathFigure.Segments.Add(arcSegment);
+            }
+        }
+
+        pathFigure.IsClosed = lwPolyline.IsClosed;
+        pathGeometry.Figures.Add(pathFigure);
+
+        return new System.Windows.Shapes.Path
+        {
+            Data = pathGeometry,
+            Fill = Brushes.Transparent, // LwPolylines are typically not filled unless specified
+            IsHitTestVisible = true
+        };
+    }
+
+    /// <summary>
+    /// Calculates WPF ArcSegment parameters from two DxfLwPolylineVertex points and a bulge value.
+    /// </summary>
+    private ArcSegment CalculateArcSegmentFromBulge(Point p1, Point p2, double bulge)
+    {
+        // Formulas for converting bulge to arc parameters (center, radius, angles)
+        // bulge = tan(theta / 4), where theta is the included angle of the arc segment.
+        double theta = 4 * Math.Atan(bulge);
+
+        // Distance between p1 and p2 (chord length c)
+        double c = Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
+
+        if (Math.Abs(c) < 1e-9) // Points are coincident, treat as zero-length line segment
+        {
+            return new ArcSegment(p2, new Size(0,0), 0, false, SweepDirection.Counterclockwise, true);
+        }
+
+        // Radius of the arc
+        // R = c / (2 * sin(theta / 2))
+        // Handle theta = 0 case (straight line, though already filtered by bulge check)
+        // Handle theta = 2*PI (full circle, bulge would be infinite or very large, not typical for segment)
+        double radius;
+        if (Math.Abs(Math.Sin(theta / 2.0)) < 1e-9) // Angle is too small, effectively a line
+        {
+             radius = double.MaxValue; // Effectively a line
+        } else {
+             radius = c / (2 * Math.Sin(theta / 2.0));
+        }
+
+        radius = Math.Abs(radius); // Radius must be positive
+
+        // Determine sweep direction and isLargeArc flag
+        // SweepDirection is Counterclockwise if bulge > 0, Clockwise if bulge < 0.
+        SweepDirection sweepDirection = (bulge > 0) ? SweepDirection.Counterclockwise : SweepDirection.Clockwise;
+
+        // IsLargeArc is true if |theta| > PI (180 degrees)
+        bool isLargeArc = Math.Abs(theta) > Math.PI;
+
+        // WPF ArcSegment uses Size(radius, radius) for circular arcs
+        Size arcSize = new Size(radius, radius);
+
+        // If radius becomes excessively large (almost straight line), WPF might have issues.
+        // It might be better to return a LineSegment in such extreme cases, but the bulge check should catch most.
+        if (double.IsInfinity(radius) || double.IsNaN(radius) || radius > 1e12) // Arbitrary large number
+        {
+            // This case should ideally be caught by the bulge check (bulge near zero -> LineSegment)
+            // If we reach here, it's an extreme arc. Fallback to a line-like arc.
+            // Forcing a very small curvature or treating as line if radius is too large.
+            // However, WPF's ArcSegment is robust. Let's trust it with large radii if bulge wasn't zero.
+            // The primary check is for bulge == 0.
+        }
+
+
+        return new ArcSegment(
+            p2,             // End point of the arc segment
+            arcSize,        // Size (radiusX, radiusY)
+            0,              // RotationAngle (usually 0 for 2D DXF LwPolyline arcs)
+            isLargeArc,
+            sweepDirection,
+            true            // IsStroked
+        );
     }
 } // This closes the CadService class
 
