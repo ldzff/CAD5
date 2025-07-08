@@ -2439,6 +2439,7 @@ namespace RobTeach.Views
                         {
                             var (eMinX_val, eMinY_val, eMaxX_val, eMaxY_val) = boundsTuple.Value;
                             boundsStr = $"X:[{eMinX_val:F2} to {eMaxX_val:F2}], Y:[{eMinY_val:F2} to {eMaxY_val:F2}]";
+                            AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:{entity.GetType().Name}, Layer:'{entity.Layer}', Individual Bounds:{boundsStr}", LogLevel.Debug);
 
                             minX = Math.Min(minX, eMinX_val);
                             minY = Math.Min(minY, eMinY_val);
@@ -2446,11 +2447,19 @@ namespace RobTeach.Views
                             maxY = Math.Max(maxY, eMaxY_val);
                             hasValidBounds = true;
                         }
-                        AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:{entity.GetType().Name}, Bounds:{boundsStr}. Cumulative MinX:{minX:F2}, MinY:{minY:F2}, MaxX:{maxX:F2}, MaxY:{maxY:F2}", LogLevel.Debug);
+                        else
+                        {
+                            AppLogger.Log($"GetDxfBoundingBox: Idx:{entityIndex}, Type:{entity.GetType().Name}, Layer:'{entity.Layer}' - No valid bounds returned by CalculateEntityBoundsSimple.", LogLevel.Debug);
+                        }
+                        // Log cumulative bounds after each entity that contributes
+                        if (hasValidBounds) // Only log if we have some valid bounds so far
+                        {
+                            AppLogger.Log($"GetDxfBoundingBox: Cumulative after Idx:{entityIndex} - MinX:{minX:F2}, MinY:{minY:F2}, MaxX:{maxX:F2}, MaxY:{maxY:F2}", LogLevel.Debug);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        AppLogger.Log($"GetDxfBoundingBox: Error processing entity at index {entityIndex}, Type:{entity.GetType().Name}. Error: {ex.Message}", LogLevel.Warning);
+                        AppLogger.Log($"GetDxfBoundingBox: Error processing entity at index {entityIndex}, Type:{entity.GetType().Name}. Error: {ex.Message}", ex, LogLevel.Warning);
                         // Skip entities that can't be processed
                     }
                     entityIndex++;
@@ -2463,9 +2472,11 @@ namespace RobTeach.Views
 
             if (!hasValidBounds)
             {
+                AppLogger.Log("GetDxfBoundingBox: No valid bounds found for any entity. Returning Rect.Empty.", LogLevel.Debug);
                 return Rect.Empty;
             }
 
+            AppLogger.Log($"GetDxfBoundingBox: Final Calculated BoundingBox: X={minX:F2}, Y={minY:F2}, Width={maxX - minX:F2}, Height={maxY - minY:F2}", LogLevel.Info);
             return new System.Windows.Rect(minX, minY, maxX - minX, maxY - minY);
         }
 
@@ -3043,6 +3054,56 @@ namespace RobTeach.Views
                 return false; // User cancelled SaveFileDialog
             }
         }
+        // Helper method to transform a point (used for DxfInsert)
+        private DxfPoint TransformPoint(DxfPoint point, DxfPoint location, double xScale, double yScale, double rotationDegrees)
+        {
+            // Apply scaling
+            double scaledX = point.X * xScale;
+            double scaledY = point.Y * yScale;
+
+            // Apply rotation (around block's local origin 0,0)
+            double rotationRadians = rotationDegrees * Math.PI / 180.0;
+            double cosR = Math.Cos(rotationRadians);
+            double sinR = Math.Sin(rotationRadians);
+
+            double rotatedX = scaledX * cosR - scaledY * sinR;
+            double rotatedY = scaledX * sinR + scaledY * cosR;
+
+            // Apply translation (to insert.Location)
+            // Assuming ZScaleFactor is 1.0 as it's not directly available in DxfInsert in IxMilia.Dxf
+            // The Z coordinate of the block entity is added to the insert's Z location.
+            return new DxfPoint(rotatedX + location.X, rotatedY + location.Y, point.Z * 1.0 + location.Z);
+        }
+
+        // Helper to get bounds of transformed corners of a local bounding box
+        private (double minX, double minY, double maxX, double maxY)? GetTransformedBounds(
+            (double minX, double minY, double maxX, double maxY) localBounds,
+            DxfPoint location, double xScale, double yScale, double rotationDegrees)
+        {
+            // Define the four corner points of the local bounding box in 2D (Z is ignored for transformation of bounds)
+            DxfPoint c1 = new DxfPoint(localBounds.minX, localBounds.minY, 0);
+            DxfPoint c2 = new DxfPoint(localBounds.maxX, localBounds.minY, 0);
+            DxfPoint c3 = new DxfPoint(localBounds.minX, localBounds.maxY, 0);
+            DxfPoint c4 = new DxfPoint(localBounds.maxX, localBounds.maxY, 0);
+
+            // Transform each corner point
+            // Note: The Z coordinate of the original local bounds is not used here,
+            // as we are transforming a 2D bounding box. The Z of the insert location
+            // will be added by TransformPoint, but the resulting bounds are still 2D (minX, minY, maxX, maxY).
+            DxfPoint t1 = TransformPoint(c1, location, xScale, yScale, rotationDegrees);
+            DxfPoint t2 = TransformPoint(c2, location, xScale, yScale, rotationDegrees);
+            DxfPoint t3 = TransformPoint(c3, location, xScale, yScale, rotationDegrees);
+            DxfPoint t4 = TransformPoint(c4, location, xScale, yScale, rotationDegrees);
+
+            // Find the min/max of the transformed X and Y coordinates
+            double resultMinX = Math.Min(Math.Min(t1.X, t2.X), Math.Min(t3.X, t4.X));
+            double resultMinY = Math.Min(Math.Min(t1.Y, t2.Y), Math.Min(t3.Y, t4.Y));
+            double resultMaxX = Math.Max(Math.Max(t1.X, t2.X), Math.Max(t3.X, t4.X));
+            double resultMaxY = Math.Max(Math.Max(t1.Y, t2.Y), Math.Max(t3.Y, t4.Y));
+            return (resultMinX, resultMinY, resultMaxX, resultMaxY);
+        }
+
+
         private (double minX, double minY, double maxX, double maxY)? CalculateEntityBoundsSimple(DxfEntity entity)
         {
             try
@@ -3050,42 +3111,97 @@ namespace RobTeach.Views
                 switch (entity)
                 {
                     case DxfLine line:
-                        var minX = Math.Min(line.P1.X, line.P2.X);
-                        var maxX = Math.Max(line.P1.X, line.P2.X);
-                        var minY = Math.Min(line.P1.Y, line.P2.Y);
-                        var maxY = Math.Max(line.P1.Y, line.P2.Y);
-                        return (minX, minY, maxX, maxY);
+                        var minX_line = Math.Min(line.P1.X, line.P2.X);
+                        var maxX_line = Math.Max(line.P1.X, line.P2.X);
+                        var minY_line = Math.Min(line.P1.Y, line.P2.Y);
+                        var maxY_line = Math.Max(line.P1.Y, line.P2.Y);
+                        return (minX_line, minY_line, maxX_line, maxY_line);
 
                     case DxfArc arc:
-                        var centerX = arc.Center.X;
-                        var centerY = arc.Center.Y;
-                        var radius = arc.Radius;
-                        return (centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+                        // Refined DxfArc bounds
+                        Point arcP1 = new Point(arc.Center.X + arc.Radius * Math.Cos(arc.StartAngle * Math.PI / 180.0),
+                                                arc.Center.Y + arc.Radius * Math.Sin(arc.StartAngle * Math.PI / 180.0));
+                        Point arcP2 = new Point(arc.Center.X + arc.Radius * Math.Cos(arc.EndAngle * Math.PI / 180.0),
+                                                arc.Center.Y + arc.Radius * Math.Sin(arc.EndAngle * Math.PI / 180.0));
+
+                        double minX_arc = Math.Min(arcP1.X, arcP2.X);
+                        double minY_arc = Math.Min(arcP1.Y, arcP2.Y);
+                        double maxX_arc = Math.Max(arcP1.X, arcP2.X);
+                        double maxY_arc = Math.Max(arcP1.Y, arcP2.Y);
+
+                        double startAngleDeg = arc.StartAngle;
+                        double endAngleDeg = arc.EndAngle;
+
+                        // Ensure endAngleDeg is greater than startAngleDeg for CCW sweep comparison
+                        // DxfArc angles are CCW.
+                        double normalizedEndAngle = endAngleDeg;
+                        while (normalizedEndAngle < startAngleDeg)
+                        {
+                            normalizedEndAngle += 360.0;
+                        }
+
+                        Action<double> checkArcAngle = (angleToCheckDeg) =>
+                        {
+                            // Check if angleToCheckDeg (0,90,180,270) is within the arc's sweep [startAngleDeg, normalizedEndAngle]
+                            // Normalize angleToCheckDeg to be in a comparable range if necessary,
+                            // e.g., if start=350, end=20 (normalized to 380), check 0 (or 360).
+                            double currentCardinalAngle = angleToCheckDeg;
+                            // Adjust cardinal angle to be in the same "lap" as startAngleDeg for comparison
+                            while (currentCardinalAngle < startAngleDeg) currentCardinalAngle += 360.0;
+
+
+                            if (currentCardinalAngle >= startAngleDeg && currentCardinalAngle <= normalizedEndAngle)
+                            {
+                                double rad = angleToCheckDeg * Math.PI / 180.0; // Use original cardinal angle for calculation
+                                double x = arc.Center.X + arc.Radius * Math.Cos(rad);
+                                double y = arc.Center.Y + arc.Radius * Math.Sin(rad);
+                                minX_arc = Math.Min(minX_arc, x);
+                                minY_arc = Math.Min(minY_arc, y);
+                                maxX_arc = Math.Max(maxX_arc, x);
+                                maxY_arc = Math.Max(maxY_arc, y);
+                            }
+                        };
+
+                        checkArcAngle(0);    // Rightmost point of full circle (X-axis)
+                        checkArcAngle(90);   // Topmost point of full circle (Y-axis)
+                        checkArcAngle(180);  // Leftmost point of full circle
+                        checkArcAngle(270);  // Bottommost point of full circle
+
+                        return (minX_arc, minY_arc, maxX_arc, maxY_arc);
 
                     case DxfCircle circle:
-                        var cX = circle.Center.X;
-                        var cY = circle.Center.Y;
-                        var r = circle.Radius;
-                        return (cX - r, cY - r, cX + r, cY + r);
+                        var cX_circle = circle.Center.X;
+                        var cY_circle = circle.Center.Y;
+                        var r_circle = circle.Radius;
+                        return (cX_circle - r_circle, cY_circle - r_circle, cX_circle + r_circle, cY_circle + r_circle);
 
                     case DxfLwPolyline lwPolyline:
                         if (lwPolyline.Vertices == null || !lwPolyline.Vertices.Any())
                             return null;
 
-                        var polyMinX = double.MaxValue;
-                        var polyMinY = double.MaxValue;
-                        var polyMaxX = double.MinValue;
-                        var polyMaxY = double.MinValue;
+                        var polyMinX = double.PositiveInfinity;
+                        var polyMinY = double.PositiveInfinity;
+                        var polyMaxX = double.NegativeInfinity;
+                        var polyMaxY = double.NegativeInfinity;
+                        bool polyBoundsInitialized = false;
 
                         foreach (var vertex in lwPolyline.Vertices)
                         {
-                            polyMinX = Math.Min(polyMinX, vertex.X);
-                            polyMinY = Math.Min(polyMinY, vertex.Y);
-                            polyMaxX = Math.Max(polyMaxX, vertex.X);
-                            polyMaxY = Math.Max(polyMaxY, vertex.Y);
+                            if (!polyBoundsInitialized)
+                            {
+                                polyMinX = vertex.X; polyMinY = vertex.Y;
+                                polyMaxX = vertex.X; polyMaxY = vertex.Y;
+                                polyBoundsInitialized = true;
+                            }
+                            else
+                            {
+                                polyMinX = Math.Min(polyMinX, vertex.X);
+                                polyMinY = Math.Min(polyMinY, vertex.Y);
+                                polyMaxX = Math.Max(polyMaxX, vertex.X);
+                                polyMaxY = Math.Max(polyMaxY, vertex.Y);
+                            }
                         }
 
-                        // Iterate through segments for bulge handling
                         if (lwPolyline.Vertices.Count > 1)
                         {
                             for (int i = 0; i < lwPolyline.Vertices.Count; i++)
@@ -3094,14 +3210,10 @@ namespace RobTeach.Views
                                 var p2Vertex = lwPolyline.IsClosed ? lwPolyline.Vertices[(i + 1) % lwPolyline.Vertices.Count] :
                                                                     (i < lwPolyline.Vertices.Count - 1 ? lwPolyline.Vertices[i + 1] : null);
 
-                                if (p2Vertex == null && i == lwPolyline.Vertices.Count - 1 && !lwPolyline.IsClosed)
-                                {
-                                    // Last vertex of an open polyline, already processed by initial vertex iteration.
-                                    break;
-                                }
-                                if (p2Vertex == null) continue; // Should ideally not be reached if logic is sound
+                                if (p2Vertex == null && i == lwPolyline.Vertices.Count - 1 && !lwPolyline.IsClosed) break;
+                                if (p2Vertex == null) continue;
 
-                                if (Math.Abs(p1Vertex.Bulge) > 1e-6) // Bulge is significant
+                                if (Math.Abs(p1Vertex.Bulge) > 1e-6)
                                 {
                                     var arcSegBounds = GetArcSegmentBoundsFromBulge(
                                         new Point(p1Vertex.X, p1Vertex.Y),
@@ -3110,6 +3222,7 @@ namespace RobTeach.Views
 
                                     if (arcSegBounds != Rect.Empty)
                                     {
+                                        // polyBoundsInitialized should be true here if Vertices.Count > 0
                                         polyMinX = Math.Min(polyMinX, arcSegBounds.Left);
                                         polyMinY = Math.Min(polyMinY, arcSegBounds.Top);
                                         polyMaxX = Math.Max(polyMaxX, arcSegBounds.Right);
@@ -3118,39 +3231,119 @@ namespace RobTeach.Views
                                 }
                             }
                         }
+                        if (!polyBoundsInitialized) return null;
                         return (polyMinX, polyMinY, polyMaxX, polyMaxY);
 
                     case DxfInsert insert:
-                        // TODO: Proper handling for DxfInsert (Blocks) is complex.
-                        // It requires iterating entities within the block definition,
-                        // applying the insert's transformation (translation, scale, rotation),
-                        // and calculating the union of their transformed bounds.
-                        // For now, just use its location as a minimal bound.
-                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert found (Name: {insert.Name}, Location: {insert.Location}). Simplified bounds used.", LogLevel.Debug);
-                        return (insert.Location.X, insert.Location.Y, insert.Location.X, insert.Location.Y);
+                        if (_currentDxfDocument == null)
+                        {
+                            AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert '{insert.Name}' - _currentDxfDocument is null. Cannot resolve block. Using insertion point.", LogLevel.Warning);
+                            return (insert.Location.X, insert.Location.Y, insert.Location.X, insert.Location.Y);
+                        }
+                        DxfBlock? block = _currentDxfDocument.Blocks.FirstOrDefault(b => b.Name == insert.Name);
+                        if (block == null || !block.Entities.Any())
+                        {
+                            AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert '{insert.Name}' - Block not found or empty. Using insertion point {insert.Location} for bounds.", LogLevel.Debug);
+                            return (insert.Location.X, insert.Location.Y, insert.Location.X, insert.Location.Y);
+                        }
+
+                        double blockMinX = double.PositiveInfinity;
+                        double blockMinY = double.PositiveInfinity;
+                        double blockMaxX = double.NegativeInfinity;
+                        double blockMaxY = double.NegativeInfinity;
+                        bool blockHasValidEntityBounds = false;
+
+                        foreach (DxfEntity entityInBlock in block.Entities)
+                        {
+                            var localEntityBounds = CalculateEntityBoundsSimple(entityInBlock);
+                            if (localEntityBounds.HasValue)
+                            {
+                                var transformedEntityBounds = GetTransformedBounds(
+                                    localEntityBounds.Value,
+                                    insert.Location,
+                                    insert.XScaleFactor,
+                                    insert.YScaleFactor,
+                                    insert.Rotation);
+
+                                if (transformedEntityBounds.HasValue)
+                                {
+                                    if (!blockHasValidEntityBounds)
+                                    {
+                                        blockMinX = transformedEntityBounds.Value.minX;
+                                        blockMinY = transformedEntityBounds.Value.minY;
+                                        blockMaxX = transformedEntityBounds.Value.maxX;
+                                        blockMaxY = transformedEntityBounds.Value.maxY;
+                                        blockHasValidEntityBounds = true;
+                                    }
+                                    else
+                                    {
+                                        blockMinX = Math.Min(blockMinX, transformedEntityBounds.Value.minX);
+                                        blockMinY = Math.Min(blockMinY, transformedEntityBounds.Value.minY);
+                                        blockMaxX = Math.Max(blockMaxX, transformedEntityBounds.Value.maxX);
+                                        blockMaxY = Math.Max(blockMaxY, transformedEntityBounds.Value.maxY);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!blockHasValidEntityBounds) {
+                             AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert '{insert.Name}' - No valid entity bounds within block. Using insertion point {insert.Location} for bounds.", LogLevel.Debug);
+                            return (insert.Location.X, insert.Location.Y, insert.Location.X, insert.Location.Y);
+                        }
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfInsert '{insert.Name}' - Calculated bounds: MinX:{blockMinX:F2}, MinY:{blockMinY:F2}, MaxX:{blockMaxX:F2}, MaxY:{blockMaxY:F2}", LogLevel.Debug);
+                        return (blockMinX, blockMinY, blockMaxX, blockMaxY);
 
                     case DxfEllipse ellipse:
-                        // TODO: Implement proper bounding box for DxfEllipse
-                        // Based on center, major/minor axis, start/end params.
-                        // For now, use center +/- major axis length as a rough estimate if axes are aligned.
-                        // This is a very rough approximation.
-                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfEllipse found. Simplified bounds used.", LogLevel.Debug);
-                        var majAxisLength = ellipse.MajorAxis.Length; // Corrected: Length is a property
-                        return (ellipse.Center.X - majAxisLength, ellipse.Center.Y - majAxisLength,
-                                ellipse.Center.X + majAxisLength, ellipse.Center.Y + majAxisLength);
+                        DxfVector majAxis = ellipse.MajorAxis;
+                        double minAxisLen = majAxis.Length * ellipse.MinorAxisRatio;
+                        DxfVector minAxis = ellipse.Normal.Cross(majAxis).Normalize() * minAxisLen;
+
+                        // Define extreme points based on ellipse parametric equation or by rotating axis-aligned bounding box
+                        // Simpler: Get 4 points by Center +/- MajorAxisVector and Center +/- MinorAxisVector
+                        // This is not a full bounding box for a rotated ellipse but gives key points.
+                        // A tighter box would transform points on the ellipse itself.
+                        // For an axis aligned ellipse (Normal=(0,0,1), MajorAxis=(len,0,0)), bounds are Center.X +/- MajorAxis.Length, Center.Y +/- MinorAxis.Length
+                        // For rotated, transform corners of this axis-aligned box.
+
+                        // Create points representing the ends of the major and minor axes in the ellipse's plane
+                        DxfPoint p_maj1 = ellipse.Center + majAxis;
+                        DxfPoint p_maj2 = ellipse.Center - majAxis;
+                        DxfPoint p_min1 = ellipse.Center + minAxis;
+                        DxfPoint p_min2 = ellipse.Center - minAxis;
+
+                        // The bounding box must contain these four points.
+                        // This is still an approximation for arbitrarily rotated ellipses; a true solution
+                        // involves finding derivatives of the parametric equation.
+                        // However, this is much better than the previous placeholder.
+                        double elMinX = Math.Min(Math.Min(p_maj1.X, p_maj2.X), Math.Min(p_min1.X, p_min2.X));
+                        double elMaxX = Math.Max(Math.Max(p_maj1.X, p_maj2.X), Math.Max(p_min1.X, p_min2.X));
+                        double elMinY = Math.Min(Math.Min(p_maj1.Y, p_maj2.Y), Math.Min(p_min1.Y, p_min2.Y));
+                        double elMaxY = Math.Max(Math.Max(p_maj1.Y, p_maj2.Y), Math.Max(p_min1.Y, p_min2.Y));
+
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfEllipse. Approx Bounds: MinX:{elMinX:F2}, MinY:{elMinY:F2}, MaxX:{elMaxX:F2}, MaxY:{elMaxY:F2}", LogLevel.Debug);
+                        return (elMinX, elMinY, elMaxX, elMaxY);
 
                     case DxfSpline spline:
-                        // TODO: Implement proper bounding box for DxfSpline (NURBS)
-                        // Often approximated by the bounds of its control points or fit points.
-                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfSpline found. No bounds calculation implemented yet, returning null.", LogLevel.Debug);
-                        // Example (if using control points):
-                        // if (spline.ControlPoints == null || !spline.ControlPoints.Any()) return null;
-                        // double sMinX = spline.ControlPoints.Min(p => p.X);
-                        // double sMinY = spline.ControlPoints.Min(p => p.Y);
-                        // double sMaxX = spline.ControlPoints.Max(p => p.X);
-                        // double sMaxY = spline.ControlPoints.Max(p => p.Y);
-                        // return (sMinX, sMinY, sMaxX, sMaxY);
-                        return null; // Placeholder
+                        if (spline.ControlPoints == null || !spline.ControlPoints.Any()) {
+                             AppLogger.Log($"CalculateEntityBoundsSimple: DxfSpline has no control points, returning null.", LogLevel.Debug);
+                            return null;
+                        }
+                        // Using control points for spline bounds (common approximation)
+                        double sMinX = spline.ControlPoints.Min(p => p.Point.X);
+                        double sMinY = spline.ControlPoints.Min(p => p.Point.Y);
+                        double sMaxX = spline.ControlPoints.Max(p => p.Point.X);
+                        double sMaxY = spline.ControlPoints.Max(p => p.Point.Y);
+                        // For NURBS, fit points might also be relevant if available and more representative.
+                        // IxMilia.Dxf.Spline has FitPoints too. We could union bounds of Control and Fit points.
+                        if (spline.FitPoints != null && spline.FitPoints.Any()) {
+                            sMinX = Math.Min(sMinX, spline.FitPoints.Min(p => p.X));
+                            sMinY = Math.Min(sMinY, spline.FitPoints.Min(p => p.Y));
+                            sMaxX = Math.Max(sMaxX, spline.FitPoints.Max(p => p.X));
+                            sMaxY = Math.Max(sMaxY, spline.FitPoints.Max(p => p.Y));
+                             AppLogger.Log($"CalculateEntityBoundsSimple: DxfSpline also used FitPoints for bounds.", LogLevel.Debug);
+                        }
+                        AppLogger.Log($"CalculateEntityBoundsSimple: DxfSpline (Control/Fit Points). Bounds: MinX:{sMinX:F2}, MinY:{sMinY:F2}, MaxX:{sMaxX:F2}, MaxY:{sMaxY:F2}", LogLevel.Debug);
+                        return (sMinX, sMinY, sMaxX, sMaxY);
 
                     default:
                         AppLogger.Log($"CalculateEntityBoundsSimple: Unhandled entity type {entity.GetType().Name}, returning null bounds.", LogLevel.Debug);
@@ -3159,7 +3352,7 @@ namespace RobTeach.Views
             }
             catch (Exception ex)
             {
-                AppLogger.Log($"CalculateEntityBoundsSimple: Error calculating bounds for entity type {entity?.GetType().Name}. Error: {ex.Message}", LogLevel.Warning);
+                AppLogger.Log($"CalculateEntityBoundsSimple: Error calculating bounds for entity type {entity?.GetType().Name}. Error: {ex.Message}", ex, LogLevel.Warning);
                 return null;
             }
         }
