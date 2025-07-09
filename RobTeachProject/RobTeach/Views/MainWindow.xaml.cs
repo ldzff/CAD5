@@ -2484,6 +2484,31 @@ namespace RobTeach.Views
         private void FitToViewButton_Click(object sender, RoutedEventArgs e) { Debug.WriteLine("[DEBUG] FitToViewButton_Click called."); PerformFitToView(); }
         private void PerformFitToView()
         {
+            // Hardcoded diagnostic transform
+            AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Applying hardcoded diagnostic transform.", LogLevel.Debug);
+
+            _scaleTransform.ScaleX = 0.3;
+            _scaleTransform.ScaleY = -0.3; // Y-flip
+
+            // Only set translation if canvas has a valid size
+            if (CadCanvas.ActualWidth > 0 && CadCanvas.ActualHeight > 0)
+            {
+                _translateTransform.X = CadCanvas.ActualWidth / 2.0;
+                _translateTransform.Y = CadCanvas.ActualHeight / 2.0;
+                AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Canvas Size W:{CadCanvas.ActualWidth:F2}, H:{CadCanvas.ActualHeight:F2}. Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
+            }
+            else
+            {
+                _translateTransform.X = 0;
+                _translateTransform.Y = 0;
+                AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Canvas size not valid. Translate set to (0,0).", LogLevel.Debug);
+            }
+
+            StatusTextBlock.Text = "Diagnostic: Hardcoded Transform";
+            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with hardcoded diagnostic transform.");
+
+            // Original PerformFitToView logic commented out:
+            /*
             Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
             AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
             Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
@@ -2548,6 +2573,7 @@ namespace RobTeach.Views
 
             StatusTextBlock.Text = "View fitted to content.";
             Debug.WriteLine("[DEBUG] PerformFitToView: Completed with centering translation.");
+            */
         }
         private void CadCanvas_MouseWheel(object sender, MouseWheelEventArgs e) { /* ... (No change) ... */ }
         private void CadCanvas_MouseDown(object sender, MouseButtonEventArgs e)
