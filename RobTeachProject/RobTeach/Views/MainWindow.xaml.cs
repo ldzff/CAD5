@@ -2534,26 +2534,20 @@ namespace RobTeach.Views
 
             _scaleTransform.ScaleY = -scale; // Invert Y-axis for CAD coordinate system (Y up)
 
-            // Simplified Translation Logic: Align logical top-left of DXF content to canvas top-left (with small padding)
-            const double fixedPadding = 10.0;
+            // Calculate the center of the DXF bounding box
+            double contentCenterX = _dxfBoundingBox.X + _dxfBoundingBox.Width / 2.0;
+            double contentCenterY = _dxfBoundingBox.Y + _dxfBoundingBox.Height / 2.0;
 
-            // DXF_minX (world coordinates) should map to canvas 'fixedPadding'
-            // ScreenX = DxfX * ScaleX + TranslateX
-            // fixedPadding = _dxfBoundingBox.X * _scaleTransform.ScaleX + _translateTransform.X
-            _translateTransform.X = fixedPadding - (_dxfBoundingBox.X * _scaleTransform.ScaleX);
+            _translateTransform.X = (canvasWidth / 2.0) - (contentCenterX * _scaleTransform.ScaleX);
+            _translateTransform.Y = (canvasHeight / 2.0) - (contentCenterY * _scaleTransform.ScaleY);
 
-            // DXF_maxY (world coordinates, which is _dxfBoundingBox.Y + _dxfBoundingBox.Height)
-            // should map to canvas 'fixedPadding' (since ScaleY is negative, this effectively brings top of content to top of canvas)
-            // ScreenY = DxfY * ScaleY + TranslateY
-            // fixedPadding = (_dxfBoundingBox.Y + _dxfBoundingBox.Height) * _scaleTransform.ScaleY + _translateTransform.Y
-            _translateTransform.Y = fixedPadding - ((_dxfBoundingBox.Y + _dxfBoundingBox.Height) * _scaleTransform.ScaleY);
+            AppLogger.Log($"PerformFitToView (Centering): Scale={scale:F4}", LogLevel.Debug);
+            AppLogger.Log($"PerformFitToView (Centering): ContentCenter DXF X:{contentCenterX:F2}, Y:{contentCenterY:F2}", LogLevel.Debug);
+            AppLogger.Log($"PerformFitToView (Centering): CanvasCenter X:{canvasWidth / 2.0:F2}, Y:{canvasHeight / 2.0:F2}", LogLevel.Debug);
+            AppLogger.Log($"PerformFitToView (Centering): Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
 
-            AppLogger.Log($"PerformFitToView (SimplifiedTranslation): Scale={scale:F4}", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView (SimplifiedTranslation): BBox X:{_dxfBoundingBox.X:F2}, Y:{_dxfBoundingBox.Y:F2}, MaxY:{_dxfBoundingBox.Y + _dxfBoundingBox.Height:F2}", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView (SimplifiedTranslation): Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
-
-            StatusTextBlock.Text = "View fitted (top-left alignment).";
-            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with simplified top-left translation.");
+            StatusTextBlock.Text = "View fitted to content.";
+            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with centering translation.");
         }
         private void CadCanvas_MouseWheel(object sender, MouseWheelEventArgs e) { /* ... (No change) ... */ }
         private void CadCanvas_MouseDown(object sender, MouseButtonEventArgs e)
