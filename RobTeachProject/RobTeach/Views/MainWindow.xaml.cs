@@ -2509,6 +2509,18 @@ namespace RobTeach.Views
 
             // Original PerformFitToView logic commented out:
             /*
+            // Diagnostic: Apply minimal transformation (no scale, no Y-flip, no translation)
+            AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Applying minimal transform (Scale 1,1, Translate 0,0).", LogLevel.Debug);
+            _scaleTransform.ScaleX = 1.0;
+            _scaleTransform.ScaleY = 1.0; // NO Y-axis flip for this diagnostic
+            _translateTransform.X = 0.0;
+            _translateTransform.Y = 0.0;
+
+            StatusTextBlock.Text = "Diagnostic: Raw Coordinates (Y-Down)";
+            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with minimal diagnostic transform.");
+
+            // Original PerformFitToView logic commented out below:
+            /*
             Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
             AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
             Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
@@ -2573,6 +2585,7 @@ namespace RobTeach.Views
 
             StatusTextBlock.Text = "View fitted to content.";
             Debug.WriteLine("[DEBUG] PerformFitToView: Completed with centering translation.");
+            */
             */
         }
         private void CadCanvas_MouseWheel(object sender, MouseWheelEventArgs e) { /* ... (No change) ... */ }
