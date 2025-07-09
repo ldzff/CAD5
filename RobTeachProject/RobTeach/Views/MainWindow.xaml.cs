@@ -2532,22 +2532,36 @@ namespace RobTeach.Views
             _scaleTransform.ScaleX = scale;
             _scaleTransform.ScaleY = -scale; // Invert Y-axis for CAD coordinate system (Y up)
 
-            // Calculate the center of the DXF bounding box
-            double contentCenterX = _dxfBoundingBox.X + _dxfBoundingBox.Width / 2.0;
-            double contentCenterY = _dxfBoundingBox.Y + _dxfBoundingBox.Height / 2.0;
+            // Alternative Translation Logic:
+            // Calculate padding required to center the scaled content
+            double scaledContentWidth = _dxfBoundingBox.Width * scale; // Use positive scale for width calculation
+            double scaledContentHeight = _dxfBoundingBox.Height * scale; // Use positive scale for height calculation
 
-            double targetTranslateX = (canvasWidth / 2.0) - (contentCenterX * _scaleTransform.ScaleX);
-            double targetTranslateY = (canvasHeight / 2.0) - (contentCenterY * _scaleTransform.ScaleY);
+            double paddingX = (canvasWidth - scaledContentWidth) / 2.0;
+            double paddingY = (canvasHeight - scaledContentHeight) / 2.0;
 
-            _translateTransform.X = targetTranslateX;
-            _translateTransform.Y = targetTranslateY;
+            // Translate to position the (scaled) top-left of the DXF bounding box,
+            // accounting for the Y-axis flip.
+            // DXF _dxfBoundingBox.X (minX) should map to canvas paddingX.
+            // DXF _dxfBoundingBox.Y + _dxfBoundingBox.Height (maxY_dxf, which is top of content due to Y-flip)
+            // should map to canvas paddingY.
+
+            _translateTransform.X = paddingX - (_dxfBoundingBox.X * _scaleTransform.ScaleX);
+            // For Y: maxY_dxf = _dxfBoundingBox.Y + _dxfBoundingBox.Height
+            // Target screen Y for maxY_dxf (top of content) is paddingY.
+            // ScreenY = DxfY * scaleY + TranslateY
+            // paddingY = maxY_dxf * _scaleTransform.ScaleY + _translateTransform.Y
+            // _translateTransform.Y = paddingY - (maxY_dxf * _scaleTransform.ScaleY)
+            _translateTransform.Y = paddingY - ((_dxfBoundingBox.Y + _dxfBoundingBox.Height) * _scaleTransform.ScaleY);
 
             Debug.WriteLine($"[DEBUG] PerformFitToView: ScaleX={_scaleTransform.ScaleX:F4}, ScaleY={_scaleTransform.ScaleY:F4}");
-            Debug.WriteLine($"[DEBUG] PerformFitToView: ContentCenter=({contentCenterX:F2}, {contentCenterY:F2})");
-            Debug.WriteLine($"[DEBUG] PerformFitToView: TargetTranslateX={targetTranslateX:F2}, TargetTranslateY={targetTranslateY:F2}");
+            Debug.WriteLine($"[DEBUG] PerformFitToView: ScaledContent W:{scaledContentWidth:F2}, H:{scaledContentHeight:F2}");
+            Debug.WriteLine($"[DEBUG] PerformFitToView: Padding X:{paddingX:F2}, Y:{paddingY:F2}");
+            Debug.WriteLine($"[DEBUG] PerformFitToView: BBox X:{_dxfBoundingBox.X:F2}, Y:{_dxfBoundingBox.Y:F2}, H:{_dxfBoundingBox.Height:F2}");
+            Debug.WriteLine($"[DEBUG] PerformFitToView: TranslateTransform X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}");
 
             StatusTextBlock.Text = "View fitted to content.";
-            Debug.WriteLine("[DEBUG] PerformFitToView: Completed.");
+            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with alternative translation.");
         }
         private void CadCanvas_MouseWheel(object sender, MouseWheelEventArgs e) { /* ... (No change) ... */ }
         private void CadCanvas_MouseDown(object sender, MouseButtonEventArgs e)
