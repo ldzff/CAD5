@@ -2484,31 +2484,6 @@ namespace RobTeach.Views
         private void FitToViewButton_Click(object sender, RoutedEventArgs e) { Debug.WriteLine("[DEBUG] FitToViewButton_Click called."); PerformFitToView(); }
         private void PerformFitToView()
         {
-            // Hardcoded diagnostic transform
-            AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Applying hardcoded diagnostic transform.", LogLevel.Debug);
-
-            _scaleTransform.ScaleX = 0.3;
-            _scaleTransform.ScaleY = -0.3; // Y-flip
-
-            // Only set translation if canvas has a valid size
-            if (CadCanvas.ActualWidth > 0 && CadCanvas.ActualHeight > 0)
-            {
-                _translateTransform.X = CadCanvas.ActualWidth / 2.0;
-                _translateTransform.Y = CadCanvas.ActualHeight / 2.0;
-                AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Canvas Size W:{CadCanvas.ActualWidth:F2}, H:{CadCanvas.ActualHeight:F2}. Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
-            }
-            else
-            {
-                _translateTransform.X = 0;
-                _translateTransform.Y = 0;
-                AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Canvas size not valid. Translate set to (0,0).", LogLevel.Debug);
-            }
-
-            StatusTextBlock.Text = "Diagnostic: Hardcoded Transform";
-            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with hardcoded diagnostic transform.");
-
-            // Original PerformFitToView logic commented out:
-            /*
             // Diagnostic: Apply minimal transformation (no scale, no Y-flip, no translation)
             AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Applying minimal transform (Scale 1,1, Translate 0,0).", LogLevel.Debug);
             _scaleTransform.ScaleX = 1.0;
@@ -2517,76 +2492,89 @@ namespace RobTeach.Views
             _translateTransform.Y = 0.0;
 
             StatusTextBlock.Text = "Diagnostic: Raw Coordinates (Y-Down)";
-            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with minimal diagnostic transform.");
+            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with minimal diagnostic transform (Scale 1,1, Translate 0,0).");
 
-            // Original PerformFitToView logic commented out below:
-            /*
-            Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
-            AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
-            Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
+            /* // Start of ALL OTHER LOGIC (original centering and previous hardcoded 0.3 scale)
 
-            if (_dxfBoundingBox.IsEmpty || CadCanvas.ActualWidth == 0 || CadCanvas.ActualHeight == 0)
-            {
-                Debug.WriteLine("[DEBUG] PerformFitToView: BoundingBox is empty or Canvas size is zero. Resetting transforms.");
-                _scaleTransform.ScaleX = 1;
-                _scaleTransform.ScaleY = 1;
-                _translateTransform.X = 0;
-                _translateTransform.Y = 0;
-                Debug.WriteLine("[DEBUG] PerformFitToView: Exiting due to empty bounds or zero canvas size.");
-                return;
-            }
+            // Hardcoded diagnostic transform (from previous step, now also commented out)
+            // AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Applying hardcoded diagnostic transform.", LogLevel.Debug);
+            // _scaleTransform.ScaleX = 0.3;
+            // _scaleTransform.ScaleY = -0.3; // Y-flip
+            // if (CadCanvas.ActualWidth > 0 && CadCanvas.ActualHeight > 0)
+            // {
+            //     _translateTransform.X = CadCanvas.ActualWidth / 2.0;
+            //     _translateTransform.Y = CadCanvas.ActualHeight / 2.0;
+            //     AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Canvas Size W:{CadCanvas.ActualWidth:F2}, H:{CadCanvas.ActualHeight:F2}. Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
+            // }
+            // else
+            // {
+            //     _translateTransform.X = 0;
+            //     _translateTransform.Y = 0;
+            //     AppLogger.Log($"[DIAGNOSTIC] PerformFitToView: Canvas size not valid. Translate set to (0,0).", LogLevel.Debug);
+            // }
+            // StatusTextBlock.Text = "Diagnostic: Hardcoded Transform";
+            // Debug.WriteLine("[DEBUG] PerformFitToView: Completed with hardcoded diagnostic transform.");
 
-            double canvasWidth = CadCanvas.ActualWidth;
-            double canvasHeight = CadCanvas.ActualHeight;
+            // Original PerformFitToView logic (centering)
+            // Debug.WriteLine("[DEBUG] PerformFitToView: Entered.");
+            // AppLogger.Log($"PerformFitToView: Initial _dxfBoundingBox: X={_dxfBoundingBox.X:F2}, Y={_dxfBoundingBox.Y:F2}, Width={_dxfBoundingBox.Width:F2}, Height={_dxfBoundingBox.Height:F2}", LogLevel.Debug);
+            // Debug.WriteLine($"[DEBUG] PerformFitToView: CadCanvas.ActualWidth={CadCanvas.ActualWidth}, CadCanvas.ActualHeight={CadCanvas.ActualHeight}");
 
-            double contentWidth = _dxfBoundingBox.Width;
-            double contentHeight = _dxfBoundingBox.Height;
+            // if (_dxfBoundingBox.IsEmpty || CadCanvas.ActualWidth == 0 || CadCanvas.ActualHeight == 0)
+            // {
+            //     Debug.WriteLine("[DEBUG] PerformFitToView: BoundingBox is empty or Canvas size is zero. Resetting transforms.");
+            //     _scaleTransform.ScaleX = 1;
+            //     _scaleTransform.ScaleY = 1;
+            //     _translateTransform.X = 0;
+            //     _translateTransform.Y = 0;
+            //     Debug.WriteLine("[DEBUG] PerformFitToView: Exiting due to empty bounds or zero canvas size.");
+            //     return; // This return was for the original logic
+            // }
 
-            if (contentWidth <= 0 || contentHeight <= 0) // Check for non-positive width/height
-            {
-                Debug.WriteLine($"[DEBUG] PerformFitToView: ContentWidth ({contentWidth}) or ContentHeight ({contentHeight}) is zero or negative. Exiting.");
-                // Reset to default rather than leaving transforms in an unknown state
-                _scaleTransform.ScaleX = 1;
-                _scaleTransform.ScaleY = 1;
-                _translateTransform.X = 0;
-                _translateTransform.Y = 0;
-                StatusTextBlock.Text = "Error: Invalid content dimensions for fit.";
-                return;
-            }
+            // double canvasWidth = CadCanvas.ActualWidth;
+            // double canvasHeight = CadCanvas.ActualHeight;
 
-            // Calculate scale to fit content within canvas, maintaining aspect ratio
-            double scaleX = canvasWidth / contentWidth;
-            double scaleY = canvasHeight / contentHeight;
-            double scale = Math.Min(scaleX, scaleY);
+            // double contentWidth = _dxfBoundingBox.Width;
+            // double contentHeight = _dxfBoundingBox.Height;
 
-            // Apply a margin, e.g., 10% of the canvas dimension
-            double marginFactor = 0.90;
-            scale *= marginFactor;
+            // if (contentWidth <= 0 || contentHeight <= 0) // Check for non-positive width/height
+            // {
+            //     Debug.WriteLine($"[DEBUG] PerformFitToView: ContentWidth ({contentWidth}) or ContentHeight ({contentHeight}) is zero or negative. Exiting.");
+            //     _scaleTransform.ScaleX = 1;
+            //     _scaleTransform.ScaleY = 1;
+            //     _translateTransform.X = 0;
+            //     _translateTransform.Y = 0;
+            //     StatusTextBlock.Text = "Error: Invalid content dimensions for fit.";
+            //     return; // This return was for the original logic
+            // }
 
-            AppLogger.Log($"PerformFitToView: Canvas(W:{canvasWidth:F2}, H:{canvasHeight:F2}), Content(W:{contentWidth:F2}, H:{contentHeight:F2})", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView: ScaleX_raw={scaleX:F4}, ScaleY_raw={scaleY:F4}, FinalScale={scale:F4}", LogLevel.Debug);
+            // // Calculate scale to fit content within canvas, maintaining aspect ratio
+            // double scaleX_calc = canvasWidth / contentWidth;
+            // double scaleY_calc = canvasHeight / contentHeight;
+            // double scale_calc = Math.Min(scaleX_calc, scaleY_calc);
+            // double marginFactor = 0.90;
+            // scale_calc *= marginFactor;
 
-            _scaleTransform.ScaleX = scale;
-            _scaleTransform.ScaleY = -scale; // Invert Y-axis for CAD coordinate system (Y up)
+            // AppLogger.Log($"PerformFitToView: Canvas(W:{canvasWidth:F2}, H:{canvasHeight:F2}), Content(W:{contentWidth:F2}, H:{contentHeight:F2})", LogLevel.Debug);
+            // AppLogger.Log($"PerformFitToView: ScaleX_raw={scaleX_calc:F4}, ScaleY_raw={scaleY_calc:F4}, FinalScale={scale_calc:F4}", LogLevel.Debug);
 
-            _scaleTransform.ScaleY = -scale; // Invert Y-axis for CAD coordinate system (Y up)
+            // _scaleTransform.ScaleX = scale_calc;
+            // _scaleTransform.ScaleY = -scale_calc;
 
-            // Calculate the center of the DXF bounding box
-            double contentCenterX = _dxfBoundingBox.X + _dxfBoundingBox.Width / 2.0;
-            double contentCenterY = _dxfBoundingBox.Y + _dxfBoundingBox.Height / 2.0;
+            // double contentCenterX = _dxfBoundingBox.X + _dxfBoundingBox.Width / 2.0;
+            // double contentCenterY = _dxfBoundingBox.Y + _dxfBoundingBox.Height / 2.0;
 
-            _translateTransform.X = (canvasWidth / 2.0) - (contentCenterX * _scaleTransform.ScaleX);
-            _translateTransform.Y = (canvasHeight / 2.0) - (contentCenterY * _scaleTransform.ScaleY);
+            // _translateTransform.X = (canvasWidth / 2.0) - (contentCenterX * _scaleTransform.ScaleX);
+            // _translateTransform.Y = (canvasHeight / 2.0) - (contentCenterY * _scaleTransform.ScaleY);
 
-            AppLogger.Log($"PerformFitToView (Centering): Scale={scale:F4}", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView (Centering): ContentCenter DXF X:{contentCenterX:F2}, Y:{contentCenterY:F2}", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView (Centering): CanvasCenter X:{canvasWidth / 2.0:F2}, Y:{canvasHeight / 2.0:F2}", LogLevel.Debug);
-            AppLogger.Log($"PerformFitToView (Centering): Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
+            // AppLogger.Log($"PerformFitToView (Centering): Scale={scale_calc:F4}", LogLevel.Debug);
+            // AppLogger.Log($"PerformFitToView (Centering): ContentCenter DXF X:{contentCenterX:F2}, Y:{contentCenterY:F2}", LogLevel.Debug);
+            // AppLogger.Log($"PerformFitToView (Centering): CanvasCenter X:{canvasWidth / 2.0:F2}, Y:{canvasHeight / 2.0:F2}", LogLevel.Debug);
+            // AppLogger.Log($"PerformFitToView (Centering): Translate X:{_translateTransform.X:F2}, Y:{_translateTransform.Y:F2}", LogLevel.Debug);
 
-            StatusTextBlock.Text = "View fitted to content.";
-            Debug.WriteLine("[DEBUG] PerformFitToView: Completed with centering translation.");
-            */
-            */
+            // StatusTextBlock.Text = "View fitted to content.";
+            // Debug.WriteLine("[DEBUG] PerformFitToView: Completed with centering translation.");
+            */ // End of ALL OTHER LOGIC block
         }
         private void CadCanvas_MouseWheel(object sender, MouseWheelEventArgs e) { /* ... (No change) ... */ }
         private void CadCanvas_MouseDown(object sender, MouseButtonEventArgs e)
